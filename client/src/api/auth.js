@@ -8,6 +8,7 @@ const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
+  withCredentials: true, // Include credentials for CORS requests
 });
 
 // Add token to requests
@@ -34,11 +35,41 @@ api.interceptors.response.use(
 
 // Auth API calls
 export const authAPI = {
-  register: (userData) => api.post("/auth/register", userData),
+  register: (userData) => {
+    // Transform userData to match backend schema
+    const transformedData = {
+      ...userData,
+      // Ensure correct field names for backend
+      medicalLicenseNumber:
+        userData.medicalLicenseNumber || userData.licenseNumber,
+      primarySpecialty: userData.primarySpecialty || userData.specialty,
+    };
+
+    // Remove old field names if they exist
+    delete transformedData.licenseNumber;
+    delete transformedData.specialty;
+
+    return api.post("/auth/register", transformedData);
+  },
   login: (credentials) => api.post("/auth/login", credentials),
   logout: () => api.get("/auth/logout"),
   getMe: () => api.get("/auth/me"),
-  updateProfile: (userData) => api.put("/auth/updatedetails", userData),
+  updateProfile: (userData) => {
+    // Transform userData to match backend schema
+    const transformedData = {
+      ...userData,
+      // Ensure correct field names for backend
+      medicalLicenseNumber:
+        userData.medicalLicenseNumber || userData.licenseNumber,
+      primarySpecialty: userData.primarySpecialty || userData.specialty,
+    };
+
+    // Remove old field names if they exist
+    delete transformedData.licenseNumber;
+    delete transformedData.specialty;
+
+    return api.put("/auth/updatedetails", transformedData);
+  },
   updatePassword: (passwordData) =>
     api.put("/auth/updatepassword", passwordData),
 };

@@ -23,9 +23,9 @@ exports.register = async (req, res) => {
       email,
       password,
       role,
-      licenseNumber,
+      medicalLicenseNumber,
       licenseState,
-      specialty,
+      primarySpecialty,
       yearsOfExperience,
       medicalSchool,
     } = req.body;
@@ -39,16 +39,16 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Create user
+    // Create user with correct schema fields
     const user = await User.create({
       firstName,
       lastName,
       email,
       password,
       role,
-      licenseNumber,
+      medicalLicenseNumber,
       licenseState,
-      specialty,
+      primarySpecialty,
       yearsOfExperience,
       medicalSchool,
     });
@@ -91,8 +91,8 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Check password
-    const isMatch = await user.comparePassword(password);
+    // ✅ Fixed: Use matchPassword instead of comparePassword
+    const isMatch = await user.matchPassword(password);
     if (!isMatch) {
       return res.status(401).json({
         success: false,
@@ -142,7 +142,7 @@ exports.updateDetails = async (req, res) => {
       firstName: req.body.firstName,
       lastName: req.body.lastName,
       bio: req.body.bio,
-      specialty: req.body.specialty,
+      specialty: req.body.primarySpecialty,
     };
 
     const user = await User.findByIdAndUpdate(req.user.id, fieldsToUpdate, {
@@ -170,8 +170,8 @@ exports.updatePassword = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("+password");
 
-    // Check current password
-    if (!(await user.comparePassword(req.body.currentPassword))) {
+    // ✅ Fixed: Use matchPassword instead of comparePassword
+    if (!(await user.matchPassword(req.body.currentPassword))) {
       return res.status(401).json({
         success: false,
         message: "Current password is incorrect",

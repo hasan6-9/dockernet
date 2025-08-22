@@ -43,12 +43,32 @@ mongoose
 app.get("/api/health", (req, res) => {
   res.json({ message: "Dockernet API is running!" });
 });
+app.get("/api/health/db", async (req, res) => {
+  try {
+    await mongoose.connection.db.admin().ping();
+    res.json({
+      success: true,
+      message: "Database connected successfully",
+      stats: await mongoose.connection.db.stats(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Database connection failed",
+      error: error.message,
+    });
+  }
+});
 
 // Import routes
 const authRoutes = require("./routes/auth");
+const profileRoutes = require("./routes/profile");
+const adminRoutes = require("./routes/admin");
 
 // Mount routes
 app.use("/api/auth", authRoutes);
+app.use("/api/profile", profileRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

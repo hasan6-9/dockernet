@@ -5,15 +5,18 @@ const User = require("../models/User");
 exports.protect = async (req, res, next) => {
   let token;
 
-  // Check for token in headers
+  console.log("Authorization header:", req.headers.authorization);
+
   if (
     req.headers.authorization &&
     req.headers.authorization.startsWith("Bearer")
   ) {
     token = req.headers.authorization.split(" ")[1];
+    console.log("Token found:", token ? "Yes" : "No");
   }
 
   if (!token) {
+    console.log("No token provided");
     return res.status(401).json({
       success: false,
       message: "Not authorized to access this route",
@@ -23,11 +26,14 @@ exports.protect = async (req, res, next) => {
   try {
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log("Decoded token ID:", decoded.id);
 
     // Get user from token
     const user = await User.findById(decoded.id).select("-password");
+    console.log("User found:", user ? user._id : "Not found");
 
     if (!user) {
+      console.log("User not found in database");
       return res.status(401).json({
         success: false,
         message: "No user found with this token",
@@ -35,7 +41,9 @@ exports.protect = async (req, res, next) => {
     }
 
     // Check if user is active
-    if (!user.isActive) {
+    console.log("Account status:", user.accountStatus);
+    if (user.accountStatus !== "active") {
+      console.log("Account not active");
       return res.status(401).json({
         success: false,
         message: "User account has been deactivated",
@@ -43,8 +51,10 @@ exports.protect = async (req, res, next) => {
     }
 
     req.user = user;
+    console.log("Authentication successful, user:", user._id);
     next();
   } catch (error) {
+    console.error("Token verification error:", error.message);
     return res.status(401).json({
       success: false,
       message: "Not authorized to access this route",

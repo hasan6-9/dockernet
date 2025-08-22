@@ -25,32 +25,39 @@ exports.validateRegister = [
     ),
 
   body("role")
-    .isIn(["senior", "junior"])
-    .withMessage("Role must be either senior or junior"),
+    .isIn(["senior", "junior", "admin"])
+    .withMessage("Role must be either senior, junior, or admin"),
 
-  body("licenseNumber")
+  // ✅ Match schema: medicalLicenseNumber
+  body("medicalLicenseNumber")
     .trim()
     .isLength({ min: 3, max: 50 })
-    .withMessage("License number is required"),
+    .withMessage("Medical license number is required"),
 
   body("licenseState")
     .trim()
     .isLength({ min: 2, max: 50 })
     .withMessage("License state is required"),
 
-  body("specialty")
+  // ✅ Match schema: primarySpecialty
+  body("primarySpecialty")
     .trim()
     .isLength({ min: 2, max: 100 })
-    .withMessage("Medical specialty is required"),
+    .withMessage("Primary medical specialty is required"),
 
   body("yearsOfExperience")
-    .isInt({ min: 0, max: 70 })
-    .withMessage("Years of experience must be a number between 0 and 70"),
+    .isInt({ min: 0, max: 50 }) // schema max = 50
+    .withMessage("Years of experience must be a number between 0 and 50"),
 
-  body("medicalSchool")
+  // ✅ medicalSchool is an object
+  body("medicalSchool.name")
     .trim()
     .isLength({ min: 2, max: 200 })
-    .withMessage("Medical school information is required"),
+    .withMessage("Medical school name is required"),
+
+  body("medicalSchool.graduationYear")
+    .isInt({ min: 1950, max: new Date().getFullYear() })
+    .withMessage("Valid graduation year is required"),
 ];
 
 exports.validateLogin = [

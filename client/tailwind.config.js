@@ -4,32 +4,45 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Medical Professional Color Palette
+        // Enhanced Medical Professional Color Palette
         primary: {
-          50: "#eff6ff",
-          100: "#dbeafe",
-          200: "#bfdbfe",
-          300: "#93c5fd",
-          400: "#60a5fa",
-          500: "#3b82f6",
-          600: "#2563eb",
-          700: "#1d4ed8",
-          800: "#1e40af",
-          900: "#1e3a8a",
-          950: "#172554",
+          50: "#f0f9ff",
+          100: "#e0f2fe",
+          200: "#bae6fd",
+          300: "#7dd3fc",
+          400: "#38bdf8",
+          500: "#0ea5e9",
+          600: "#0284c7",
+          700: "#0369a1",
+          800: "#075985",
+          900: "#0c4a6e",
+          950: "#082f49",
         },
         medical: {
-          50: "#f0fdfa",
-          100: "#ccfbf1",
-          200: "#99f6e4",
-          300: "#5eead4",
-          400: "#2dd4bf",
-          500: "#14b8a6",
-          600: "#0d9488",
-          700: "#0f766e",
-          800: "#115e59",
-          900: "#134e4a",
-          950: "#042f2e",
+          50: "#ecfdf5",
+          100: "#d1fae5",
+          200: "#a7f3d0",
+          300: "#6ee7b7",
+          400: "#34d399",
+          500: "#10b981",
+          600: "#059669",
+          700: "#047857",
+          800: "#065f46",
+          900: "#064e3b",
+          950: "#022c22",
+        },
+        trust: {
+          50: "#f8fafc",
+          100: "#f1f5f9",
+          200: "#e2e8f0",
+          300: "#cbd5e1",
+          400: "#94a3b8",
+          500: "#64748b",
+          600: "#475569",
+          700: "#334155",
+          800: "#1e293b",
+          900: "#0f172a",
+          950: "#020617",
         },
         accent: {
           50: "#fdf4ff",
@@ -83,32 +96,15 @@ module.exports = {
           900: "#7f1d1d",
           950: "#450a0a",
         },
-        gray: {
-          50: "#f9fafb",
-          100: "#f3f4f6",
-          200: "#e5e7eb",
-          300: "#d1d5db",
-          400: "#9ca3af",
-          500: "#6b7280",
-          600: "#4b5563",
-          700: "#374151",
-          800: "#1f2937",
-          900: "#111827",
-          950: "#030712",
-        },
       },
       fontFamily: {
         sans: [
           "Inter var",
           "Inter",
-          "system-ui",
           "-apple-system",
           "BlinkMacSystemFont",
           '"Segoe UI"',
           "Roboto",
-          '"Helvetica Neue"',
-          "Arial",
-          '"Noto Sans"',
           "sans-serif",
         ],
         display: ["Cal Sans", "Inter var", "Inter", "system-ui", "sans-serif"],
@@ -117,7 +113,6 @@ module.exports = {
           "Monaco",
           "Inconsolata",
           '"Roboto Mono"',
-          '"Source Code Pro"',
           "monospace",
         ],
       },
@@ -131,42 +126,24 @@ module.exports = {
         "2xl": ["1.5rem", { lineHeight: "2rem" }],
         "3xl": ["1.875rem", { lineHeight: "2.25rem" }],
         "4xl": ["2.25rem", { lineHeight: "2.5rem" }],
-        "5xl": ["3rem", { lineHeight: "1" }],
-        "6xl": ["3.75rem", { lineHeight: "1" }],
-        "7xl": ["4.5rem", { lineHeight: "1" }],
-        "8xl": ["6rem", { lineHeight: "1" }],
-        "9xl": ["8rem", { lineHeight: "1" }],
+        "5xl": ["3rem", { lineHeight: "1.1" }],
+        "6xl": ["3.75rem", { lineHeight: "1.1" }],
+        "7xl": ["4.5rem", { lineHeight: "1.1" }],
+        "8xl": ["6rem", { lineHeight: "1.1" }],
+        "9xl": ["8rem", { lineHeight: "1.1" }],
       },
       spacing: {
         4.5: "1.125rem",
         5.5: "1.375rem",
         6.5: "1.625rem",
-        7.5: "1.875rem",
-        8.5: "2.125rem",
-        9.5: "2.375rem",
-        10.5: "2.625rem",
-        11.5: "2.875rem",
-        12.5: "3.125rem",
-        13: "3.25rem",
-        15: "3.75rem",
-        17: "4.25rem",
         18: "4.5rem",
-        19: "4.75rem",
-        21: "5.25rem",
         22: "5.5rem",
-        23: "5.75rem",
-        25: "6.25rem",
         26: "6.5rem",
-        27: "6.75rem",
-        29: "7.25rem",
         30: "7.5rem",
-        31: "7.75rem",
-        33: "8.25rem",
         34: "8.5rem",
-        35: "8.75rem",
-        37: "9.25rem",
         38: "9.5rem",
-        39: "9.75rem",
+        128: "32rem",
+        144: "36rem",
       },
       borderRadius: {
         "4xl": "2rem",
@@ -174,26 +151,43 @@ module.exports = {
         "6xl": "3rem",
       },
       boxShadow: {
-        "3xl": "0 35px 60px -12px rgba(0, 0, 0, 0.25)",
-        soft: "0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)",
-        "soft-lg":
-          "0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
-        glow: "0 0 20px rgba(59, 130, 246, 0.15)",
-        medical: "0 4px 20px rgba(20, 184, 166, 0.15)",
-        "inner-soft": "inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)",
+        medical:
+          "0 4px 6px -1px rgba(16, 185, 129, 0.1), 0 2px 4px -1px rgba(16, 185, 129, 0.06)",
+        "medical-lg":
+          "0 10px 15px -3px rgba(16, 185, 129, 0.1), 0 4px 6px -2px rgba(16, 185, 129, 0.05)",
+        trust:
+          "0 4px 6px -1px rgba(100, 116, 139, 0.1), 0 2px 4px -1px rgba(100, 116, 139, 0.06)",
+        "trust-lg":
+          "0 10px 15px -3px rgba(100, 116, 139, 0.1), 0 4px 6px -2px rgba(100, 116, 139, 0.05)",
+        glow: "0 0 20px rgba(14, 165, 233, 0.3)",
+        "glow-medical": "0 0 20px rgba(16, 185, 129, 0.3)",
+        "inner-light": "inset 0 2px 4px 0 rgba(255, 255, 255, 0.06)",
+        glass: "0 8px 32px 0 rgba(31, 38, 135, 0.37)",
+        "elevation-1":
+          "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)",
+        "elevation-2":
+          "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+        "elevation-3":
+          "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+        "elevation-4":
+          "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
       },
       animation: {
         "fade-in": "fadeIn 0.5s ease-in-out",
-        "fade-in-up": "fadeInUp 0.5s ease-out",
-        "fade-in-down": "fadeInDown 0.5s ease-out",
-        "slide-in-right": "slideInRight 0.3s ease-out",
-        "slide-in-left": "slideInLeft 0.3s ease-out",
-        "scale-in": "scaleIn 0.2s ease-out",
-        "bounce-gentle": "bounceGentle 0.6s ease-out",
-        "pulse-gentle": "pulseGentle 2s ease-in-out infinite",
+        "fade-in-up": "fadeInUp 0.6s ease-out",
+        "fade-in-down": "fadeInDown 0.6s ease-out",
+        "slide-in-right": "slideInRight 0.4s ease-out",
+        "slide-in-left": "slideInLeft 0.4s ease-out",
+        "scale-in": "scaleIn 0.3s ease-out",
+        "bounce-gentle": "bounceGentle 0.8s ease-out",
+        "pulse-soft": "pulseSoft 2s ease-in-out infinite",
         float: "float 3s ease-in-out infinite",
-        gradient: "gradient 3s ease infinite",
+        "gradient-shift": "gradientShift 3s ease infinite",
         shimmer: "shimmer 2s linear infinite",
+        "glow-pulse": "glowPulse 2s ease-in-out infinite",
+        "card-hover": "cardHover 0.3s ease-out",
+        typing: "typing 3.5s steps(40, end)",
+        blink: "blink 1s infinite",
       },
       keyframes: {
         fadeIn: {
@@ -201,38 +195,38 @@ module.exports = {
           "100%": { opacity: "1" },
         },
         fadeInUp: {
-          "0%": { opacity: "0", transform: "translateY(20px)" },
+          "0%": { opacity: "0", transform: "translateY(30px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
         fadeInDown: {
-          "0%": { opacity: "0", transform: "translateY(-20px)" },
+          "0%": { opacity: "0", transform: "translateY(-30px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
         slideInRight: {
-          "0%": { opacity: "0", transform: "translateX(20px)" },
+          "0%": { opacity: "0", transform: "translateX(30px)" },
           "100%": { opacity: "1", transform: "translateX(0)" },
         },
         slideInLeft: {
-          "0%": { opacity: "0", transform: "translateX(-20px)" },
+          "0%": { opacity: "0", transform: "translateX(-30px)" },
           "100%": { opacity: "1", transform: "translateX(0)" },
         },
         scaleIn: {
-          "0%": { opacity: "0", transform: "scale(0.95)" },
+          "0%": { opacity: "0", transform: "scale(0.9)" },
           "100%": { opacity: "1", transform: "scale(1)" },
         },
         bounceGentle: {
           "0%, 20%, 40%, 60%, 80%, 100%": { transform: "translateY(0)" },
-          "50%": { transform: "translateY(-5px)" },
+          "50%": { transform: "translateY(-8px)" },
         },
-        pulseGentle: {
+        pulseSoft: {
           "0%, 100%": { opacity: "1" },
-          "50%": { opacity: "0.8" },
+          "50%": { opacity: "0.7" },
         },
         float: {
           "0%, 100%": { transform: "translateY(0px)" },
           "50%": { transform: "translateY(-10px)" },
         },
-        gradient: {
+        gradientShift: {
           "0%, 100%": { backgroundPosition: "0% 50%" },
           "50%": { backgroundPosition: "100% 50%" },
         },
@@ -240,39 +234,43 @@ module.exports = {
           "0%": { transform: "translateX(-100%)" },
           "100%": { transform: "translateX(100%)" },
         },
+        glowPulse: {
+          "0%, 100%": { boxShadow: "0 0 20px rgba(14, 165, 233, 0.3)" },
+          "50%": { boxShadow: "0 0 40px rgba(14, 165, 233, 0.5)" },
+        },
+        cardHover: {
+          "0%": { transform: "translateY(0) scale(1)" },
+          "100%": { transform: "translateY(-4px) scale(1.02)" },
+        },
+        typing: {
+          "0%": { width: "0" },
+          "100%": { width: "100%" },
+        },
+        blink: {
+          "0%, 50%": { borderColor: "transparent" },
+          "51%, 100%": { borderColor: "currentColor" },
+        },
       },
       backdropBlur: {
         xs: "2px",
+        "4xl": "72px",
       },
-      typography: {
-        DEFAULT: {
-          css: {
-            color: "#374151",
-            maxWidth: "none",
-            hr: {
-              marginTop: "2em",
-              marginBottom: "2em",
-            },
-            "h1, h2, h3, h4": {
-              fontWeight: "600",
-            },
-            h1: {
-              fontSize: "2.25rem",
-              lineHeight: "2.5rem",
-              marginBottom: "1rem",
-            },
-            h2: {
-              fontSize: "1.875rem",
-              lineHeight: "2.25rem",
-              marginBottom: "0.875rem",
-            },
-            h3: {
-              fontSize: "1.5rem",
-              lineHeight: "2rem",
-              marginBottom: "0.75rem",
-            },
-          },
-        },
+      backgroundImage: {
+        "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
+        "gradient-conic":
+          "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
+        "medical-pattern":
+          "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2310b981' fill-opacity='0.03'%3E%3Ccircle cx='30' cy='30' r='4'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")",
+        "trust-pattern":
+          "url(\"data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%2364748b' fill-opacity='0.02' fill-rule='evenodd'%3E%3Cpath d='m0 40l40-40h-40v40zm40 0v-40h-40l40 40z'/%3E%3C/g%3E%3C/svg%3E\")",
+      },
+      transitionDuration: {
+        400: "400ms",
+        600: "600ms",
+      },
+      transitionTimingFunction: {
+        "bounce-in": "cubic-bezier(0.68, -0.55, 0.265, 1.55)",
+        smooth: "cubic-bezier(0.4, 0, 0.2, 1)",
       },
     },
   },
@@ -280,57 +278,192 @@ module.exports = {
     require("@tailwindcss/forms"),
     require("@tailwindcss/aspect-ratio"),
     require("@tailwindcss/typography"),
-    // Custom plugin for medical-themed utilities
-    function ({ addUtilities, theme }) {
+    // Custom Medical Platform Plugin
+    function ({ addUtilities, addComponents, theme }) {
       const newUtilities = {
+        // Glass morphism utilities
         ".glass": {
           background: "rgba(255, 255, 255, 0.25)",
-          "backdrop-filter": "blur(10px)",
-          "-webkit-backdrop-filter": "blur(10px)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
           border: "1px solid rgba(255, 255, 255, 0.18)",
         },
         ".glass-dark": {
           background: "rgba(0, 0, 0, 0.25)",
-          "backdrop-filter": "blur(10px)",
-          "-webkit-backdrop-filter": "blur(10px)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
           border: "1px solid rgba(255, 255, 255, 0.1)",
         },
+        ".glass-medical": {
+          background: "rgba(16, 185, 129, 0.1)",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
+          border: "1px solid rgba(16, 185, 129, 0.2)",
+        },
+        // Gradient utilities
         ".gradient-medical": {
-          background: "linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)",
+          background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
         },
         ".gradient-primary": {
-          background: "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
+          background: "linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)",
+        },
+        ".gradient-trust": {
+          background: "linear-gradient(135deg, #64748b 0%, #475569 100%)",
         },
         ".gradient-accent": {
           background: "linear-gradient(135deg, #d946ef 0%, #a21caf 100%)",
         },
-        ".text-gradient": {
-          background: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
-          "-webkit-background-clip": "text",
-          "-webkit-text-fill-color": "transparent",
-          "background-clip": "text",
+        // Text gradients
+        ".text-gradient-medical": {
+          background: "linear-gradient(135deg, #10b981, #059669)",
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent",
+          backgroundClip: "text",
         },
-        ".card-medical": {
-          background: "white",
-          "border-radius": "1rem",
-          "box-shadow": "0 4px 20px rgba(20, 184, 166, 0.15)",
-          border: "1px solid rgba(20, 184, 166, 0.1)",
+        ".text-gradient-primary": {
+          background: "linear-gradient(135deg, #0ea5e9, #0284c7)",
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent",
+          backgroundClip: "text",
         },
-        ".btn-medical": {
-          background: "linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)",
-          color: "white",
-          padding: "0.75rem 1.5rem",
-          "border-radius": "0.75rem",
-          "font-weight": "500",
-          "box-shadow": "0 4px 15px rgba(20, 184, 166, 0.25)",
-          transition: "all 0.2s ease-in-out",
-          "&:hover": {
-            transform: "translateY(-2px)",
-            "box-shadow": "0 8px 25px rgba(20, 184, 166, 0.35)",
-          },
+        // Medical themed patterns
+        ".pattern-medical": {
+          backgroundImage: theme("backgroundImage.medical-pattern"),
+        },
+        ".pattern-trust": {
+          backgroundImage: theme("backgroundImage.trust-pattern"),
         },
       };
+
+      const newComponents = {
+        // Enhanced button components
+        ".btn-medical": {
+          background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+          color: "white",
+          padding: "0.75rem 2rem",
+          borderRadius: "0.75rem",
+          fontWeight: "600",
+          fontSize: "0.875rem",
+          boxShadow: "0 4px 15px rgba(16, 185, 129, 0.3)",
+          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+          "&:hover": {
+            transform: "translateY(-2px)",
+            boxShadow: "0 8px 25px rgba(16, 185, 129, 0.4)",
+          },
+          "&:active": {
+            transform: "translateY(0)",
+          },
+        },
+        ".btn-primary-enhanced": {
+          background: "linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)",
+          color: "white",
+          padding: "0.75rem 2rem",
+          borderRadius: "0.75rem",
+          fontWeight: "600",
+          fontSize: "0.875rem",
+          boxShadow: "0 4px 15px rgba(14, 165, 233, 0.3)",
+          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+          "&:hover": {
+            transform: "translateY(-2px)",
+            boxShadow: "0 8px 25px rgba(14, 165, 233, 0.4)",
+          },
+        },
+        ".btn-ghost-enhanced": {
+          background: "transparent",
+          color: theme("colors.trust.600"),
+          padding: "0.75rem 2rem",
+          borderRadius: "0.75rem",
+          fontWeight: "500",
+          fontSize: "0.875rem",
+          border: `1px solid ${theme("colors.trust.200")}`,
+          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+          "&:hover": {
+            background: theme("colors.trust.50"),
+            borderColor: theme("colors.trust.300"),
+            transform: "translateY(-1px)",
+          },
+        },
+        // Enhanced card components
+        ".card-medical": {
+          background: "white",
+          borderRadius: "1rem",
+          padding: "1.5rem",
+          boxShadow: theme("boxShadow.medical"),
+          border: `1px solid ${theme("colors.medical.100")}`,
+          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+          "&:hover": {
+            boxShadow: theme("boxShadow.medical-lg"),
+            transform: "translateY(-2px)",
+            borderColor: theme("colors.medical.200"),
+          },
+        },
+        ".card-trust": {
+          background: "white",
+          borderRadius: "1rem",
+          padding: "1.5rem",
+          boxShadow: theme("boxShadow.trust"),
+          border: `1px solid ${theme("colors.trust.100")}`,
+          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+          "&:hover": {
+            boxShadow: theme("boxShadow.trust-lg"),
+            transform: "translateY(-2px)",
+            borderColor: theme("colors.trust.200"),
+          },
+        },
+        ".card-glass": {
+          background: "rgba(255, 255, 255, 0.25)",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
+          borderRadius: "1rem",
+          padding: "1.5rem",
+          border: "1px solid rgba(255, 255, 255, 0.18)",
+          boxShadow: theme("boxShadow.glass"),
+        },
+        // Enhanced input components
+        ".input-medical": {
+          width: "100%",
+          padding: "0.75rem 1rem",
+          fontSize: "0.875rem",
+          borderRadius: "0.75rem",
+          border: `2px solid ${theme("colors.trust.200")}`,
+          backgroundColor: "white",
+          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+          "&:focus": {
+            outline: "none",
+            borderColor: theme("colors.medical.400"),
+            boxShadow: `0 0 0 3px ${theme("colors.medical.100")}`,
+          },
+          "&::placeholder": {
+            color: theme("colors.trust.400"),
+          },
+        },
+        // Status badges with enhanced design
+        ".badge-verified": {
+          display: "inline-flex",
+          alignItems: "center",
+          padding: "0.25rem 0.75rem",
+          borderRadius: "9999px",
+          fontSize: "0.75rem",
+          fontWeight: "600",
+          background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+          color: "white",
+          boxShadow: "0 2px 8px rgba(16, 185, 129, 0.3)",
+        },
+        ".badge-pending": {
+          display: "inline-flex",
+          alignItems: "center",
+          padding: "0.25rem 0.75rem",
+          borderRadius: "9999px",
+          fontSize: "0.75rem",
+          fontWeight: "600",
+          background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+          color: "white",
+          boxShadow: "0 2px 8px rgba(245, 158, 11, 0.3)",
+        },
+      };
+
       addUtilities(newUtilities);
+      addComponents(newComponents);
     },
   ],
 };
