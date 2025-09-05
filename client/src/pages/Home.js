@@ -11,21 +11,21 @@ const Home = () => {
       name: "Dr. Sarah Chen",
       role: "Senior Cardiologist",
       content:
-        "Doconnect has transformed how I manage my practice. Finding qualified junior doctors has never been easier.",
+        "Dockernet has transformed how I manage my practice. The enhanced profiles and advanced search make finding qualified junior doctors effortless.",
       avatar: "SC",
     },
     {
       name: "Dr. Michael Rodriguez",
       role: "Junior Emergency Medicine",
       content:
-        "The platform helped me connect with amazing mentors and advance my career in ways I never imagined.",
+        "The platform helped me showcase my portfolio and connect with amazing mentors, advancing my career in ways I never imagined.",
       avatar: "MR",
     },
     {
       name: "Dr. Emily Thompson",
       role: "Senior Neurologist",
       content:
-        "The quality of professionals on this platform is exceptional. Highly recommended for serious medical practices.",
+        "The verification process and professional profiles ensure exceptional quality. Highly recommended for serious medical collaborations.",
       avatar: "ET",
     },
   ];
@@ -35,25 +35,56 @@ const Home = () => {
       icon: "🏥",
       title: "Verified Medical Professionals",
       description:
-        "Every doctor is thoroughly verified with medical licenses and credentials",
+        "Every doctor is thoroughly verified with medical licenses and credentials through automated and admin workflows",
+    },
+    {
+      icon: "📊",
+      title: "Enhanced Professional Profiles",
+      description:
+        "Showcase your portfolio, experience, skills, ratings, and verified documents",
+    },
+    {
+      icon: "🔍",
+      title: "Advanced Doctor Search",
+      description:
+        "Multi-filter search by specialty, experience, rating, location, and more",
     },
     {
       icon: "🤝",
       title: "Seamless Collaboration",
       description:
-        "Built-in tools for project management and secure communication",
+        "Built-in tools for project management, secure communication, and real-time messaging",
     },
     {
       icon: "💼",
       title: "Flexible Opportunities",
       description:
-        "Part-time, full-time, and project-based medical opportunities",
+        "Part-time, full-time, and project-based remote medical opportunities",
     },
     {
       icon: "🔒",
       title: "HIPAA Compliant",
       description:
         "Enterprise-grade security for all medical communications and data",
+    },
+  ];
+
+  const statistics = [
+    {
+      value: "1,000+",
+      label: "Verified Doctors",
+    },
+    {
+      value: "500+",
+      label: "Successful Collaborations",
+    },
+    {
+      value: "4.8/5",
+      label: "Average Rating",
+    },
+    {
+      value: "95%",
+      label: "Satisfaction Rate",
     },
   ];
 
@@ -75,7 +106,7 @@ const Home = () => {
                 <span className="text-white font-bold text-lg">D</span>
               </div>
               <span className="text-2xl font-bold text-gradient-medical">
-                Doconnect
+                Dockernet
               </span>
             </div>
 
@@ -87,16 +118,16 @@ const Home = () => {
                 Features
               </a>
               <a
+                href="#how-it-works"
+                className="text-trust-600 hover:text-medical-600 font-medium transition-colors"
+              >
+                How It Works
+              </a>
+              <a
                 href="#testimonials"
                 className="text-trust-600 hover:text-medical-600 font-medium transition-colors"
               >
                 Testimonials
-              </a>
-              <a
-                href="#pricing"
-                className="text-trust-600 hover:text-medical-600 font-medium transition-colors"
-              >
-                Pricing
               </a>
             </div>
 
@@ -126,31 +157,31 @@ const Home = () => {
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <h1 className="text-5xl md:text-7xl font-bold text-trust-900 mb-6 animate-fade-in-up">
-              The Future of
+              Upwork for Doctors:
               <span className="block text-gradient-medical">
-                Medical Collaboration
+                Connect, Collaborate, Advance
               </span>
             </h1>
             <p className="text-xl md:text-2xl text-trust-600 mb-8 max-w-3xl mx-auto animate-fade-in-up animation-delay-200">
-              Connect senior doctors with talented junior doctors for remote
-              medical opportunities. Building the next generation of healthcare
-              professionals.
+              The premier marketplace where senior doctors delegate tasks to
+              talented junior doctors for remote opportunities. Seniors scale
+              their practices, juniors gain experience and income.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12 animate-fade-in-up animation-delay-400">
               {!isAuthenticated && (
                 <>
                   <Link
-                    to="/register"
+                    to="/register?role=senior"
                     className="btn-medical text-lg px-8 py-4"
                   >
-                    Start Your Journey
+                    I'm a Senior Doctor
                   </Link>
                   <Link
-                    to="/login"
-                    className="btn-ghost-enhanced text-lg px-8 py-4"
+                    to="/register?role=junior"
+                    className="btn-primary-enhanced text-lg px-8 py-4"
                   >
-                    Sign In
+                    I'm a Junior Doctor
                   </Link>
                 </>
               )}
@@ -165,18 +196,20 @@ const Home = () => {
               <div className="flex items-center space-x-2">
                 <div className="w-2 h-2 bg-medical-400 rounded-full animate-pulse-soft animation-delay-200"></div>
                 <span className="text-sm font-medium">
-                  Verified Professionals
+                  100% Verified Professionals
                 </span>
               </div>
               <div className="flex items-center space-x-2">
                 <div className="w-2 h-2 bg-medical-400 rounded-full animate-pulse-soft animation-delay-400"></div>
-                <span className="text-sm font-medium">Secure Platform</span>
+                <span className="text-sm font-medium">
+                  Secure & Confidential
+                </span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Floating Elements */}
+        {/* Floating Elements for Modern Design */}
         <div className="absolute top-20 left-10 w-20 h-20 bg-gradient-medical rounded-full opacity-20 animate-float"></div>
         <div className="absolute top-40 right-20 w-16 h-16 bg-gradient-primary rounded-full opacity-30 animate-float animation-delay-300"></div>
         <div className="absolute bottom-20 left-1/4 w-12 h-12 bg-gradient-accent rounded-full opacity-25 animate-float animation-delay-600"></div>
@@ -190,8 +223,8 @@ const Home = () => {
               Built for Medical Professionals
             </h2>
             <p className="text-xl text-trust-600 max-w-2xl mx-auto">
-              Whether you're looking to expand your practice or advance your
-              career, we have the tools you need.
+              Whether you're a senior doctor looking to delegate or a junior
+              seeking opportunities, our enhanced platform has you covered.
             </p>
           </div>
 
@@ -206,7 +239,7 @@ const Home = () => {
                   For Senior Doctors
                 </h3>
                 <p className="text-trust-600">
-                  Scale your practice with trusted junior doctors
+                  Scale your practice with verified junior talent
                 </p>
               </div>
 
@@ -226,7 +259,7 @@ const Home = () => {
                     </svg>
                   </div>
                   <span className="text-trust-700">
-                    Access pre-vetted junior doctors
+                    Advanced search for pre-vetted juniors
                   </span>
                 </li>
                 <li className="flex items-center space-x-3">
@@ -244,7 +277,7 @@ const Home = () => {
                     </svg>
                   </div>
                   <span className="text-trust-700">
-                    Delegate routine tasks efficiently
+                    Delegate tasks via detailed job postings
                   </span>
                 </li>
                 <li className="flex items-center space-x-3">
@@ -278,7 +311,7 @@ const Home = () => {
                     </svg>
                   </div>
                   <span className="text-trust-700">
-                    Secure collaboration tools
+                    Secure, HIPAA-compliant tools
                   </span>
                 </li>
               </ul>
@@ -303,7 +336,7 @@ const Home = () => {
                   For Junior Doctors
                 </h3>
                 <p className="text-trust-600">
-                  Accelerate your career with mentorship opportunities
+                  Build your career with remote mentorship opportunities
                 </p>
               </div>
 
@@ -323,7 +356,7 @@ const Home = () => {
                     </svg>
                   </div>
                   <span className="text-trust-700">
-                    Learn from experienced practitioners
+                    Showcase your enhanced profile and portfolio
                   </span>
                 </li>
                 <li className="flex items-center space-x-3">
@@ -341,7 +374,7 @@ const Home = () => {
                     </svg>
                   </div>
                   <span className="text-trust-700">
-                    Flexible remote opportunities
+                    Search flexible remote opportunities
                   </span>
                 </li>
                 <li className="flex items-center space-x-3">
@@ -359,7 +392,7 @@ const Home = () => {
                     </svg>
                   </div>
                   <span className="text-trust-700">
-                    Competitive compensation
+                    Earn competitive compensation
                   </span>
                 </li>
                 <li className="flex items-center space-x-3">
@@ -377,7 +410,7 @@ const Home = () => {
                     </svg>
                   </div>
                   <span className="text-trust-700">
-                    Build professional network
+                    Build ratings and network
                   </span>
                 </li>
               </ul>
@@ -395,23 +428,64 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Features Section */}
+      {/* How It Works Section */}
       <section
-        id="features"
+        id="how-it-works"
         className="py-20 bg-gradient-to-br from-trust-50 to-medical-50"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-trust-900 mb-4">
-              Why Choose Doconnect?
+              How Dockernet Works
             </h2>
             <p className="text-xl text-trust-600 max-w-2xl mx-auto">
-              Built specifically for medical professionals with enterprise-grade
-              security and compliance
+              Simple steps to start collaborating on our secure platform
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid md:grid-cols-2 gap-12">
+            <div className="card-trust">
+              <h3 className="text-2xl font-bold text-trust-900 mb-6 text-center">
+                For Senior Doctors
+              </h3>
+              <ol className="space-y-4 list-decimal list-inside text-trust-700">
+                <li>Sign up and get verified with your credentials</li>
+                <li>Post detailed job opportunities</li>
+                <li>Use advanced search to find matching junior doctors</li>
+                <li>Hire, collaborate securely, and rate the experience</li>
+              </ol>
+            </div>
+            <div className="card-trust">
+              <h3 className="text-2xl font-bold text-trust-900 mb-6 text-center">
+                For Junior Doctors
+              </h3>
+              <ol className="space-y-4 list-decimal list-inside text-trust-700">
+                <li>Sign up and build your enhanced professional profile</li>
+                <li>Upload documents for verification</li>
+                <li>Search and apply to opportunities with your portfolio</li>
+                <li>
+                  Complete projects, earn ratings, and advance your career
+                </li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section id="features" className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-trust-900 mb-4">
+              Why Choose Dockernet?
+            </h2>
+            <p className="text-xl text-trust-600 max-w-2xl mx-auto">
+              The enhanced platform built for secure medical freelancing and
+              collaboration
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.map((feature, index) => (
               <div
                 key={index}
@@ -431,6 +505,36 @@ const Home = () => {
         </div>
       </section>
 
+      {/* Statistics Section */}
+      <section className="py-20 bg-gradient-to-br from-trust-50 to-medical-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-trust-900 mb-4">
+              Our Impact in Numbers
+            </h2>
+            <p className="text-xl text-trust-600 max-w-2xl mx-auto">
+              Join a growing community of medical professionals achieving
+              success
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-4 gap-8">
+            {statistics.map((stat, index) => (
+              <div
+                key={index}
+                className="text-center animate-fade-in-up"
+                style={{ animationDelay: `${index * 100}ms` }}
+              >
+                <div className="text-5xl font-bold text-medical-600 mb-2">
+                  {stat.value}
+                </div>
+                <div className="text-trust-600 font-medium">{stat.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Testimonials Section */}
       <section id="testimonials" className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -439,7 +543,7 @@ const Home = () => {
               Trusted by Medical Professionals
             </h2>
             <p className="text-xl text-trust-600">
-              See what doctors are saying about their experience
+              Hear from doctors transforming their practices and careers
             </p>
           </div>
 
@@ -485,11 +589,11 @@ const Home = () => {
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
             Ready to Transform Your
-            <span className="block">Medical Practice?</span>
+            <span className="block">Medical Career?</span>
           </h2>
           <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto">
-            Join thousands of medical professionals who are already using
-            Doconnect to advance their careers and expand their practices.
+            Join thousands of verified medical professionals building successful
+            remote collaborations.
           </p>
 
           {!isAuthenticated && (
@@ -525,7 +629,7 @@ const Home = () => {
                 <div className="w-8 h-8 bg-gradient-medical rounded-lg flex items-center justify-center">
                   <span className="text-white font-bold">D</span>
                 </div>
-                <span className="text-xl font-bold">Doconnect</span>
+                <span className="text-xl font-bold">Dockernet</span>
               </div>
               <p className="text-trust-300 mb-4 max-w-md">
                 The premier marketplace connecting senior doctors with talented
@@ -548,7 +652,10 @@ const Home = () => {
               <h4 className="font-semibold mb-4">Platform</h4>
               <ul className="space-y-2 text-trust-300">
                 <li>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <a
+                    href="#features"
+                    className="hover:text-white transition-colors"
+                  >
                     Features
                   </a>
                 </li>
@@ -599,7 +706,7 @@ const Home = () => {
 
           <div className="border-t border-trust-800 mt-8 pt-8 text-center text-trust-400">
             <p>
-              &copy; 2025 Doconnect. All rights reserved. HIPAA Compliant
+              &copy; 2025 Dockernet. All rights reserved. HIPAA Compliant
               Medical Platform.
             </p>
           </div>

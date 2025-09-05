@@ -10,7 +10,8 @@ const Profile = () => {
     firstName: user?.firstName || "",
     lastName: user?.lastName || "",
     bio: user?.bio || "",
-    specialty: user?.specialty || "",
+    primarySpecialty: user?.primarySpecialty || "",
+    medicalLicenseNumber: user?.medicalLicenseNumber || "",
   });
   const [message, setMessage] = useState("");
 
@@ -39,7 +40,8 @@ const Profile = () => {
       firstName: user?.firstName || "",
       lastName: user?.lastName || "",
       bio: user?.bio || "",
-      specialty: user?.specialty || "",
+      primarySpecialty: user?.primarySpecialty || "",
+      medicalLicenseNumber: user?.medicalLicenseNumber || "",
     });
     setIsEditing(false);
     setMessage("");
@@ -57,10 +59,10 @@ const Profile = () => {
       user?.firstName,
       user?.lastName,
       user?.email,
-      user?.specialty,
+      user?.primarySpecialty,
       user?.bio,
       user?.medicalSchool,
-      user?.licenseNumber,
+      user?.medicalLicenseNumber,
       user?.yearsOfExperience,
     ];
     const completed = fields.filter(
@@ -310,7 +312,7 @@ const Profile = () => {
                     Dr. {user?.firstName} {user?.lastName}
                   </h1>
                   <p className="text-gray-600 text-lg mb-2">
-                    {user?.specialty || "Medical Professional"}
+                    {user?.primarySpecialty || "Medical Professional"}
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <span
@@ -490,19 +492,37 @@ const Profile = () => {
 
                       <div>
                         <label
-                          htmlFor="specialty"
+                          htmlFor="primarySpecialty"
                           className="block text-sm font-semibold text-gray-700 mb-2"
                         >
-                          Medical Specialty
+                          Primary Specialty
                         </label>
                         <input
                           type="text"
-                          name="specialty"
-                          id="specialty"
-                          value={formData.specialty}
+                          name="primarySpecialty"
+                          id="primarySpecialty"
+                          value={formData.primarySpecialty}
                           onChange={handleChange}
                           className="input-medical"
                           placeholder="e.g., Cardiology, Pediatrics, Internal Medicine"
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="medicalLicenseNumber"
+                          className="block text-sm font-semibold text-gray-700 mb-2"
+                        >
+                          Medical License Number
+                        </label>
+                        <input
+                          type="text"
+                          name="medicalLicenseNumber"
+                          id="medicalLicenseNumber"
+                          value={formData.medicalLicenseNumber}
+                          onChange={handleChange}
+                          className="input-medical"
+                          placeholder="Enter your medical license number"
                         />
                       </div>
 
@@ -593,10 +613,10 @@ const Profile = () => {
                           </div>
                           <div>
                             <label className="text-sm font-medium text-gray-500">
-                              Medical Specialty
+                              Primary Specialty
                             </label>
                             <p className="text-gray-900 font-medium">
-                              {user?.specialty || "Not specified"}
+                              {user?.primarySpecialty || "Not specified"}
                             </p>
                           </div>
                           <div>
@@ -631,7 +651,8 @@ const Profile = () => {
                               License Information
                             </label>
                             <p className="text-gray-900 font-medium">
-                              {user?.licenseNumber} ({user?.licenseState})
+                              {user?.medicalLicenseNumber} ({user?.licenseState}
+                              )
                             </p>
                           </div>
                         </div>

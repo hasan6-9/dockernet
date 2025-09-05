@@ -1,7 +1,16 @@
 // server/routes/profile.js - Profile Management Routes
 const express = require("express");
 const { body, query, param } = require("express-validator");
-const { protect, authorize } = require("../middleware/auth");
+
+// ✅ UPDATED: Import the new middleware functions
+const {
+  protect,
+  authorize,
+  requireActive,
+  requireVerifiedAccount,
+  checkAccountStatus,
+} = require("../middleware/auth");
+
 const {
   getMyProfile,
   getPublicProfile,
@@ -24,7 +33,7 @@ const {
 
 const router = express.Router();
 
-// Validation middleware
+// Validation middleware - keeping your existing validation exactly as-is
 const validateBasicProfile = [
   body("firstName")
     .optional()
@@ -342,21 +351,22 @@ const validatePrivacy = [
     .withMessage("Show last seen must be a boolean"),
 ];
 
-// Public routes
+// =============================================================================
+// PUBLIC ROUTES - No authentication required
+// =============================================================================
 router.get("/search", validateSearch, searchProfiles);
 router.get("/:identifier", getPublicProfile);
 
-// Protected routes - require authentication
-router.use(protect);
+// =============================================================================
+// BASIC PROTECTED ROUTES - Accessible to pending + active users
+// =============================================================================
+router.use(protect); // All routes below require authentication
 
-// Profile management routes
-router.get("/me", getMyProfile);
+// Profile viewing and basic updates (pending users can access these)
+router.get("/me", checkAccountStatus, getMyProfile);
 router.put("/basic", validateBasicProfile, updateBasicProfile);
-router.post("/photo", uploadProfilePhoto);
-router.put("/privacy", validatePrivacy, updatePrivacy);
-router.get("/analytics", getAnalytics);
 
-// Document management
+// Document management (pending users need to upload documents for verification)
 router.post("/documents", uploadDocuments);
 router.delete(
   "/documents/:documentId",
@@ -364,45 +374,87 @@ router.delete(
   deleteDocument
 );
 
-// Experience management
-router.post("/experience", validateExperience, addExperience);
+// Basic profile photo upload (pending users should be able to do this)
+router.post("/photo", uploadProfilePhoto);
+
+// =============================================================================
+// ACTIVE ACCOUNT ROUTES - Require active status
+// =============================================================================
+
+// Experience management (requires active account - this is professional info)
+router.post("/experience", requireActive, validateExperience, addExperience);
 router.put(
   "/experience/:experienceId",
+  requireActive,
   param("experienceId").isMongoId().withMessage("Invalid experience ID"),
   validateExperience,
   updateExperience
 );
 router.delete(
   "/experience/:experienceId",
+  requireActive,
   param("experienceId").isMongoId().withMessage("Invalid experience ID"),
   deleteExperience
 );
 
-// Skills management
-router.put("/skills", validateSkills, updateSkills);
+// Skills management (requires active account - professional feature)
+router.put("/skills", requireActive, validateSkills, updateSkills);
 
-// Certification management
-router.post("/certifications", validateCertification, addCertification);
+// Certification management (requires active account - professional credentials)
+router.post(
+  "/certifications",
+  requireActive,
+  validateCertification,
+  addCertification
+);
 router.put(
   "/certifications/:certificationId",
+  requireActive,
   param("certificationId").isMongoId().withMessage("Invalid certification ID"),
   validateCertification,
   updateCertification
 );
 router.delete(
   "/certifications/:certificationId",
+  requireActive,
   param("certificationId").isMongoId().withMessage("Invalid certification ID"),
   deleteCertification
 );
 
-// Availability management
-router.put("/availability", validateAvailability, updateAvailability);
+// Availability management (requires active account - professional scheduling)
+router.put(
+  "/availability",
+  requireActive,
+  validateAvailability,
+  updateAvailability
+);
 
+// Privacy settings (sensitive settings, requires active account)
+router.put("/privacy", requireActive, validatePrivacy, updatePrivacy);
+
+// =============================================================================
+// VERIFIED PROFESSIONAL ROUTES - Require verification
+// =============================================================================
+
+// Analytics (professional feature, requires verification)
+router.get("/analytics", requireVerifiedAccount, getAnalytics);
+
+// =============================================================================
+// TEST ROUTES - For development/testing
+// =============================================================================
 router.get("/test", (req, res) => {
-  res.json({ message: "Profile route is working!", user: req.user });
+  res.json({
+    message: "Profile route is working!",
+    user: req.user
+      ? {
+          id: req.user._id,
+          accountStatus: req.user.accountStatus,
+        }
+      : "No user",
+  });
 });
 
-router.get("/test-auth", protect, (req, res) => {
+router.get("/test-auth", (req, res) => {
   console.log("Test auth successful - user:", req.user._id);
   res.json({
     success: true,

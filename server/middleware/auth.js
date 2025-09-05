@@ -40,13 +40,16 @@ exports.protect = async (req, res, next) => {
       });
     }
 
-    // Check if user is active
+    // Check if user account is accessible
     console.log("Account status:", user.accountStatus);
-    if (user.accountStatus !== "active") {
-      console.log("Account not active");
+
+    // ✅ FIXED: Allow both 'active' and 'pending' accounts
+    // Only reject 'inactive' and 'suspended' accounts
+    if (!["active", "pending"].includes(user.accountStatus)) {
+      console.log("Account not accessible, status:", user.accountStatus);
       return res.status(401).json({
         success: false,
-        message: "User account has been deactivated",
+        message: "User account has been deactivated or suspended",
       });
     }
 
@@ -94,5 +97,62 @@ exports.requireSubscription = (req, res, next) => {
       message: "Active subscription required to access this resource",
     });
   }
+  next();
+};
+
+// ✅ NEW: Allow only active accounts (for sensitive operations)
+exports.requireActive = (req, res, next) => {
+  if (req.user.accountStatus !== "active") {
+    return res.status(403).json({
+      success: false,
+      message:
+        "Active account status required for this operation. Please complete your account verification.",
+    });
+  }
+  next();
+};
+
+// ✅ NEW: Allow only verified accounts (for professional features)
+exports.requireVerifiedAccount = (req, res, next) => {
+  // Check if user has overall verification status
+  const hasVerificationStatus =
+    req.user.verificationStatus && req.user.verificationStatus.overall;
+
+  if (
+    !hasVerificationStatus ||
+    req.user.verificationStatus.overall !== "verified"
+  ) {
+    return res.status(403).json({
+      success: false,
+      message: "Account verification required for this professional feature",
+    });
+  }
+  next();
+};
+
+// ✅ NEW: Check if user is admin (alternative to authorize for cleaner usage)
+exports.requireAdmin = (req, res, next) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({
+      success: false,
+      message: "Admin access required",
+    });
+  }
+  next();
+};
+
+// ✅ NEW: Check account status and provide appropriate guidance
+exports.checkAccountStatus = (req, res, next) => {
+  const status = req.user.accountStatus;
+
+  // Add status info to request for controllers to use
+  req.accountStatusInfo = {
+    status: status,
+    isPending: status === "pending",
+    isActive: status === "active",
+    canAccessBasicFeatures: ["active", "pending"].includes(status),
+    canAccessProfessionalFeatures: status === "active",
+  };
+
   next();
 };

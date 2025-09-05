@@ -5,19 +5,66 @@ import { useAuth } from "../context/AuthContext";
 const Register = () => {
   const [searchParams] = useSearchParams();
   const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-    role: searchParams.get("role") || "junior",
-    medicalLicenseNumber: "",
-    licenseState: "",
-    primarySpecialty: "",
-    yearsOfExperience: "",
-    medicalSchool: "",
+  const [formData, setFormData] = useState(() => {
+    // Try to load saved progress from localStorage
+    const savedData = localStorage.getItem("registration_progress");
+    if (savedData) {
+      try {
+        return JSON.parse(savedData);
+      } catch (e) {
+        console.error("Error parsing saved registration data:", e);
+      }
+    }
+
+    return {
+      // Basic Information
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      password: "",
+      confirmPassword: "",
+      role: searchParams.get("role") || "junior",
+
+      // Medical Credentials
+      medicalLicenseNumber: "",
+      licenseState: "",
+      primarySpecialty: "",
+      subspecialties: [],
+      yearsOfExperience: "",
+
+      // Medical School Information
+      medicalSchool: {
+        name: "",
+        graduationYear: "",
+        location: "",
+      },
+
+      // Location Information
+      location: {
+        city: "",
+        state: "",
+        country: "United States",
+        timezone: "America/New_York",
+      },
+
+      // Languages
+      languages: [{ language: "English", proficiency: "native" }],
+
+      // Professional Bio
+      bio: "",
+
+      // Privacy Preferences
+      privacy: {
+        profileVisibility: "members_only",
+        showEmail: false,
+        showPhone: false,
+        allowDirectContact: true,
+        showLastSeen: true,
+      },
+    };
   });
+
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
@@ -25,25 +72,98 @@ const Register = () => {
   const { register, loading, error, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
-  const totalSteps = 3;
+  const totalSteps = 5;
+
+  // Save progress to localStorage whenever formData changes
+  useEffect(() => {
+    const dataToSave = { ...formData };
+    delete dataToSave.password;
+    delete dataToSave.confirmPassword;
+    localStorage.setItem("registration_progress", JSON.stringify(dataToSave));
+  }, [formData]);
 
   useEffect(() => {
     if (isAuthenticated) {
+      // Clear saved progress on successful registration
+      localStorage.removeItem("registration_progress");
       navigate("/dashboard");
     }
   }, [isAuthenticated, navigate]);
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value, type, checked } = e.target;
+
+    if (name.includes(".")) {
+      // Handle nested objects like location.city, medicalSchool.name
+      const [parent, child] = name.split(".");
+      setFormData((prev) => ({
+        ...prev,
+        [parent]: {
+          ...prev[parent],
+          [child]: value,
+        },
+      }));
+    } else if (name === "subspecialties") {
+      // Handle subspecialties array
+      const currentSubspecialties = formData.subspecialties || [];
+      if (checked) {
+        setFormData((prev) => ({
+          ...prev,
+          subspecialties: [...currentSubspecialties, value],
+        }));
+      } else {
+        setFormData((prev) => ({
+          ...prev,
+          subspecialties: currentSubspecialties.filter(
+            (spec) => spec !== value
+          ),
+        }));
+      }
+    } else if (name.startsWith("privacy.")) {
+      const field = name.split(".")[1];
+      setFormData((prev) => ({
+        ...prev,
+        privacy: {
+          ...prev.privacy,
+          [field]: type === "checkbox" ? checked : value,
+        },
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+    }
+
     // Clear error for this field
-    if (errors[e.target.name]) {
-      setErrors({
-        ...errors,
-        [e.target.name]: "",
-      });
+    if (errors[name]) {
+      setErrors((prev) => ({
+        ...prev,
+        [name]: "",
+      }));
+    }
+  };
+
+  const handleLanguageChange = (index, field, value) => {
+    const updatedLanguages = [...formData.languages];
+    updatedLanguages[index] = { ...updatedLanguages[index], [field]: value };
+    setFormData((prev) => ({ ...prev, languages: updatedLanguages }));
+  };
+
+  const addLanguage = () => {
+    setFormData((prev) => ({
+      ...prev,
+      languages: [
+        ...prev.languages,
+        { language: "", proficiency: "conversational" },
+      ],
+    }));
+  };
+
+  const removeLanguage = (index) => {
+    if (formData.languages.length > 1) {
+      const updatedLanguages = formData.languages.filter((_, i) => i !== index);
+      setFormData((prev) => ({ ...prev, languages: updatedLanguages }));
     }
   };
 
@@ -51,6 +171,7 @@ const Register = () => {
     const newErrors = {};
 
     if (step === 1) {
+      // Basic Information
       if (!formData.firstName.trim())
         newErrors.firstName = "First name is required";
       if (!formData.lastName.trim())
@@ -59,7 +180,11 @@ const Register = () => {
       else if (!/\S+@\S+\.\S+/.test(formData.email))
         newErrors.email = "Email is invalid";
 
-      // UPDATED PASSWORD VALIDATION
+      if (!formData.phone.trim()) newErrors.phone = "Phone number is required";
+      else if (!/^\+?[\d\s\-\(\)]{10,}$/.test(formData.phone))
+        newErrors.phone = "Please enter a valid phone number";
+
+      // Password validation
       if (!formData.password) {
         newErrors.password = "Password is required";
       } else if (formData.password.length < 8) {
@@ -77,17 +202,48 @@ const Register = () => {
         newErrors.confirmPassword = "Passwords do not match";
       }
     } else if (step === 2) {
+      // Medical Credentials
       if (!formData.medicalLicenseNumber.trim())
         newErrors.medicalLicenseNumber = "License number is required";
       if (!formData.licenseState.trim())
         newErrors.licenseState = "License state is required";
-      if (!formData.medicalSchool.trim())
-        newErrors.medicalSchool = "Medical school is required";
+      if (!formData.primarySpecialty.trim())
+        newErrors.primarySpecialty = "Primary specialty is required";
       if (!formData.yearsOfExperience)
         newErrors.yearsOfExperience = "Years of experience is required";
     } else if (step === 3) {
-      if (!formData.primarySpecialty.trim())
-        newErrors.primarySpecialty = "Specialty is required";
+      // Medical School
+      if (!formData.medicalSchool.name.trim())
+        newErrors["medicalSchool.name"] = "Medical school name is required";
+      if (!formData.medicalSchool.graduationYear)
+        newErrors["medicalSchool.graduationYear"] =
+          "Graduation year is required";
+      else if (
+        formData.medicalSchool.graduationYear < 1950 ||
+        formData.medicalSchool.graduationYear > new Date().getFullYear()
+      )
+        newErrors["medicalSchool.graduationYear"] =
+          "Please enter a valid graduation year";
+    } else if (step === 4) {
+      // Location and Languages
+      if (!formData.location.city.trim())
+        newErrors["location.city"] = "City is required";
+      if (!formData.location.state.trim())
+        newErrors["location.state"] = "State is required";
+
+      // Validate languages
+      const hasEmptyLanguage = formData.languages.some(
+        (lang) => !lang.language.trim()
+      );
+      if (hasEmptyLanguage) {
+        newErrors.languages =
+          "Please fill in all language fields or remove empty ones";
+      }
+    } else if (step === 5) {
+      // Bio and preferences - optional but validate if provided
+      if (formData.bio && formData.bio.length > 2000) {
+        newErrors.bio = "Bio cannot exceed 2000 characters";
+      }
     }
 
     setErrors(newErrors);
@@ -110,16 +266,23 @@ const Register = () => {
     if (!validateStep(currentStep)) return;
 
     setIsLoading(true);
+
+    // Prepare data for submission
     const { confirmPassword, ...submitData } = formData;
     submitData.yearsOfExperience = parseInt(submitData.yearsOfExperience);
+    submitData.medicalSchool.graduationYear = parseInt(
+      submitData.medicalSchool.graduationYear
+    );
 
     const result = await register(submitData);
     if (result.success) {
+      localStorage.removeItem("registration_progress");
       navigate("/dashboard");
     }
     setIsLoading(false);
   };
 
+  // Data arrays
   const specialties = [
     "Anesthesiology",
     "Cardiology",
@@ -147,6 +310,28 @@ const Register = () => {
     "Surgery",
     "Urology",
     "Other",
+  ];
+
+  const subspecialties = [
+    "Interventional Cardiology",
+    "Pediatric Cardiology",
+    "Cardiac Surgery",
+    "Orthopedic Surgery",
+    "Neurosurgery",
+    "Plastic Surgery",
+    "Vascular Surgery",
+    "Pediatric Surgery",
+    "Medical Oncology",
+    "Radiation Oncology",
+    "Interventional Radiology",
+    "Diagnostic Radiology",
+    "Nuclear Medicine",
+    "Child & Adolescent Psychiatry",
+    "Geriatric Medicine",
+    "Sports Medicine",
+    "Pain Management",
+    "Critical Care Medicine",
+    "Hospice & Palliative Medicine",
   ];
 
   const states = [
@@ -202,11 +387,46 @@ const Register = () => {
     "WY",
   ];
 
+  const languages = [
+    "English",
+    "Spanish",
+    "French",
+    "German",
+    "Italian",
+    "Portuguese",
+    "Russian",
+    "Chinese (Mandarin)",
+    "Chinese (Cantonese)",
+    "Japanese",
+    "Korean",
+    "Arabic",
+    "Hindi",
+    "Other",
+  ];
+
+  const timezones = [
+    "America/New_York",
+    "America/Chicago",
+    "America/Denver",
+    "America/Los_Angeles",
+    "America/Anchorage",
+    "Pacific/Honolulu",
+  ];
+
   const getStepContent = () => {
     switch (currentStep) {
       case 1:
         return (
           <div className="space-y-6">
+            <div className="text-center mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Personal Information
+              </h3>
+              <p className="text-gray-600 text-sm">
+                Let's start with your basic information
+              </p>
+            </div>
+
             {/* Role Selection */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-3">
@@ -242,7 +462,6 @@ const Register = () => {
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center space-x-2">
-                        <span className="text-2xl">👩‍⚕️</span>
                         <span className="font-semibold text-gray-900">
                           Junior Doctor
                         </span>
@@ -284,7 +503,6 @@ const Register = () => {
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center space-x-2">
-                        <span className="text-2xl">👨‍⚕️</span>
                         <span className="font-semibold text-gray-900">
                           Senior Doctor
                         </span>
@@ -308,34 +526,21 @@ const Register = () => {
                 >
                   First Name
                 </label>
-                <div className="relative">
-                  <input
-                    id="firstName"
-                    name="firstName"
-                    type="text"
-                    value={formData.firstName}
-                    onChange={handleChange}
-                    className={`input-medical ${
-                      errors.firstName
-                        ? "border-red-400 focus:border-red-500"
-                        : ""
-                    }`}
-                    placeholder="Enter your first name"
-                  />
-                </div>
+                <input
+                  id="firstName"
+                  name="firstName"
+                  type="text"
+                  value={formData.firstName}
+                  onChange={handleChange}
+                  className={`input-medical ${
+                    errors.firstName
+                      ? "border-red-400 focus:border-red-500"
+                      : ""
+                  }`}
+                  placeholder="Enter your first name"
+                />
                 {errors.firstName && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center">
-                    <svg
-                      className="w-4 h-4 mr-1"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
+                  <p className="mt-1 text-sm text-red-600">
                     {errors.firstName}
                   </p>
                 )}
@@ -360,76 +565,58 @@ const Register = () => {
                   placeholder="Enter your last name"
                 />
                 {errors.lastName && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center">
-                    <svg
-                      className="w-4 h-4 mr-1"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    {errors.lastName}
-                  </p>
+                  <p className="mt-1 text-sm text-red-600">{errors.lastName}</p>
                 )}
               </div>
             </div>
 
-            {/* Email */}
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-semibold text-gray-700 mb-2"
-              >
-                Professional Email Address
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg
-                    className="h-5 w-5 text-gray-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"
-                    />
-                  </svg>
-                </div>
+            {/* Email and Phone */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label
+                  htmlFor="email"
+                  className="block text-sm font-semibold text-gray-700 mb-2"
+                >
+                  Professional Email Address
+                </label>
                 <input
                   id="email"
                   name="email"
                   type="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className={`input-medical pl-10 ${
+                  className={`input-medical ${
                     errors.email ? "border-red-400 focus:border-red-500" : ""
                   }`}
                   placeholder="doctor@medicalpractice.com"
                 />
+                {errors.email && (
+                  <p className="mt-1 text-sm text-red-600">{errors.email}</p>
+                )}
               </div>
-              {errors.email && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  <svg
-                    className="w-4 h-4 mr-1"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  {errors.email}
-                </p>
-              )}
+
+              <div>
+                <label
+                  htmlFor="phone"
+                  className="block text-sm font-semibold text-gray-700 mb-2"
+                >
+                  Phone Number
+                </label>
+                <input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  className={`input-medical ${
+                    errors.phone ? "border-red-400 focus:border-red-500" : ""
+                  }`}
+                  placeholder="+1 (555) 123-4567"
+                />
+                {errors.phone && (
+                  <p className="mt-1 text-sm text-red-600">{errors.phone}</p>
+                )}
+              </div>
             </div>
 
             {/* Password Fields */}
@@ -442,28 +629,13 @@ const Register = () => {
                   Password
                 </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg
-                      className="h-5 w-5 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                      />
-                    </svg>
-                  </div>
                   <input
                     id="password"
                     name="password"
                     type={showPassword ? "text" : "password"}
                     value={formData.password}
                     onChange={handleChange}
-                    className={`input-medical pl-10 pr-10 ${
+                    className={`input-medical pr-10 ${
                       errors.password
                         ? "border-red-400 focus:border-red-500"
                         : ""
@@ -477,7 +649,7 @@ const Register = () => {
                   >
                     {showPassword ? (
                       <svg
-                        className="h-5 w-5 text-gray-400 hover:text-gray-600"
+                        className="h-5 w-5 text-gray-400"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -491,7 +663,7 @@ const Register = () => {
                       </svg>
                     ) : (
                       <svg
-                        className="h-5 w-5 text-gray-400 hover:text-gray-600"
+                        className="h-5 w-5 text-gray-400"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -513,20 +685,7 @@ const Register = () => {
                   </button>
                 </div>
                 {errors.password && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center">
-                    <svg
-                      className="w-4 h-4 mr-1"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    {errors.password}
-                  </p>
+                  <p className="mt-1 text-sm text-red-600">{errors.password}</p>
                 )}
               </div>
 
@@ -537,49 +696,21 @@ const Register = () => {
                 >
                   Confirm Password
                 </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg
-                      className="h-5 w-5 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                  </div>
-                  <input
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    type={showPassword ? "text" : "password"}
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    className={`input-medical pl-10 ${
-                      errors.confirmPassword
-                        ? "border-red-400 focus:border-red-500"
-                        : ""
-                    }`}
-                    placeholder="Confirm your password"
-                  />
-                </div>
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type={showPassword ? "text" : "password"}
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  className={`input-medical ${
+                    errors.confirmPassword
+                      ? "border-red-400 focus:border-red-500"
+                      : ""
+                  }`}
+                  placeholder="Confirm your password"
+                />
                 {errors.confirmPassword && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center">
-                    <svg
-                      className="w-4 h-4 mr-1"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
+                  <p className="mt-1 text-sm text-red-600">
                     {errors.confirmPassword}
                   </p>
                 )}
@@ -623,18 +754,7 @@ const Register = () => {
                   placeholder="Enter your license number"
                 />
                 {errors.medicalLicenseNumber && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center">
-                    <svg
-                      className="w-4 h-4 mr-1"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
+                  <p className="mt-1 text-sm text-red-600">
                     {errors.medicalLicenseNumber}
                   </p>
                 )}
@@ -666,61 +786,72 @@ const Register = () => {
                   ))}
                 </select>
                 {errors.licenseState && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center">
-                    <svg
-                      className="w-4 h-4 mr-1"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
+                  <p className="mt-1 text-sm text-red-600">
                     {errors.licenseState}
                   </p>
                 )}
               </div>
             </div>
 
-            {/* Medical School */}
+            {/* Primary Specialty */}
             <div>
               <label
-                htmlFor="medicalSchool"
+                htmlFor="primarySpecialty"
                 className="block text-sm font-semibold text-gray-700 mb-2"
               >
-                Medical School
+                Primary Medical Specialty
               </label>
-              <input
-                id="medicalSchool"
-                name="medicalSchool"
-                type="text"
-                value={formData.medicalSchool}
+              <select
+                id="primarySpecialty"
+                name="primarySpecialty"
+                value={formData.primarySpecialty}
                 onChange={handleChange}
                 className={`input-medical ${
-                  errors.medicalSchool
+                  errors.primarySpecialty
                     ? "border-red-400 focus:border-red-500"
                     : ""
                 }`}
-                placeholder="Enter your medical school name"
-              />
-              {errors.medicalSchool && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  <svg
-                    className="w-4 h-4 mr-1"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  {errors.medicalSchool}
+              >
+                <option value="">Select your primary specialty</option>
+                {specialties.map((specialty) => (
+                  <option key={specialty} value={specialty}>
+                    {specialty}
+                  </option>
+                ))}
+              </select>
+              {errors.primarySpecialty && (
+                <p className="mt-1 text-sm text-red-600">
+                  {errors.primarySpecialty}
                 </p>
               )}
+            </div>
+
+            {/* Subspecialties */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Subspecialties (Optional)
+              </label>
+              <p className="text-xs text-gray-500 mb-3">
+                Select any subspecialties that apply
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                {subspecialties.map((subspecialty) => (
+                  <label
+                    key={subspecialty}
+                    className="flex items-center space-x-2 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      name="subspecialties"
+                      value={subspecialty}
+                      checked={formData.subspecialties.includes(subspecialty)}
+                      onChange={handleChange}
+                      className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                    />
+                    <span className="text-gray-700">{subspecialty}</span>
+                  </label>
+                ))}
+              </div>
             </div>
 
             {/* Years of Experience */}
@@ -744,31 +875,15 @@ const Register = () => {
               >
                 <option value="">Select experience level</option>
                 <option value="0">Less than 1 year</option>
-                <option value="1">1 year</option>
-                <option value="2">2 years</option>
-                <option value="3">3 years</option>
-                <option value="4">4 years</option>
-                <option value="5">5 years</option>
-                {Array.from({ length: 25 }, (_, i) => i + 6).map((year) => (
+                {Array.from({ length: 30 }, (_, i) => i + 1).map((year) => (
                   <option key={year} value={year}>
-                    {year} years
+                    {year} year{year > 1 ? "s" : ""}
                   </option>
                 ))}
                 <option value="30">30+ years</option>
               </select>
               {errors.yearsOfExperience && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  <svg
-                    className="w-4 h-4 mr-1"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
+                <p className="mt-1 text-sm text-red-600">
                   {errors.yearsOfExperience}
                 </p>
               )}
@@ -781,54 +896,441 @@ const Register = () => {
           <div className="space-y-6">
             <div className="text-center mb-6">
               <h3 className="text-lg font-semibold text-gray-900">
-                Medical Specialty
+                Medical Education
               </h3>
               <p className="text-gray-600 text-sm">
-                Select your primary area of medical expertise
+                Tell us about your medical education background
               </p>
             </div>
 
+            {/* Medical School Name */}
             <div>
               <label
-                htmlFor="primarySpecialty"
+                htmlFor="medicalSchool.name"
                 className="block text-sm font-semibold text-gray-700 mb-2"
               >
-                Primary Medical Specialty
+                Medical School Name
               </label>
-              <select
-                id="primarySpecialty"
-                name="primarySpecialty"
-                value={formData.primarySpecialty}
+              <input
+                id="medicalSchool.name"
+                name="medicalSchool.name"
+                type="text"
+                value={formData.medicalSchool.name}
                 onChange={handleChange}
                 className={`input-medical ${
-                  errors.primarySpecialty
+                  errors["medicalSchool.name"]
                     ? "border-red-400 focus:border-red-500"
                     : ""
                 }`}
-              >
-                <option value="">Select your specialty</option>
-                {specialties.map((specialty) => (
-                  <option key={specialty} value={specialty}>
-                    {specialty}
-                  </option>
-                ))}
-              </select>
-              {errors.primarySpecialty && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  <svg
-                    className="w-4 h-4 mr-1"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  {errors.primarySpecialty}
+                placeholder="e.g., Harvard Medical School"
+              />
+              {errors["medicalSchool.name"] && (
+                <p className="mt-1 text-sm text-red-600">
+                  {errors["medicalSchool.name"]}
                 </p>
               )}
+            </div>
+
+            {/* Graduation Year and Location */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label
+                  htmlFor="medicalSchool.graduationYear"
+                  className="block text-sm font-semibold text-gray-700 mb-2"
+                >
+                  Graduation Year
+                </label>
+                <select
+                  id="medicalSchool.graduationYear"
+                  name="medicalSchool.graduationYear"
+                  value={formData.medicalSchool.graduationYear}
+                  onChange={handleChange}
+                  className={`input-medical ${
+                    errors["medicalSchool.graduationYear"]
+                      ? "border-red-400 focus:border-red-500"
+                      : ""
+                  }`}
+                >
+                  <option value="">Select year</option>
+                  {Array.from(
+                    { length: new Date().getFullYear() - 1949 },
+                    (_, i) => new Date().getFullYear() - i
+                  ).map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+                {errors["medicalSchool.graduationYear"] && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {errors["medicalSchool.graduationYear"]}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="medicalSchool.location"
+                  className="block text-sm font-semibold text-gray-700 mb-2"
+                >
+                  Medical School Location (Optional)
+                </label>
+                <input
+                  id="medicalSchool.location"
+                  name="medicalSchool.location"
+                  type="text"
+                  value={formData.medicalSchool.location}
+                  onChange={handleChange}
+                  className="input-medical"
+                  placeholder="e.g., Boston, MA"
+                />
+              </div>
+            </div>
+          </div>
+        );
+
+      case 4:
+        return (
+          <div className="space-y-6">
+            <div className="text-center mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Location & Languages
+              </h3>
+              <p className="text-gray-600 text-sm">
+                Help us connect you with the right opportunities
+              </p>
+            </div>
+
+            {/* Current Location */}
+            <div>
+              <h4 className="text-md font-semibold text-gray-800 mb-3">
+                Current Location
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label
+                    htmlFor="location.city"
+                    className="block text-sm font-semibold text-gray-700 mb-2"
+                  >
+                    City
+                  </label>
+                  <input
+                    id="location.city"
+                    name="location.city"
+                    type="text"
+                    value={formData.location.city}
+                    onChange={handleChange}
+                    className={`input-medical ${
+                      errors["location.city"]
+                        ? "border-red-400 focus:border-red-500"
+                        : ""
+                    }`}
+                    placeholder="e.g., New York"
+                  />
+                  {errors["location.city"] && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {errors["location.city"]}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="location.state"
+                    className="block text-sm font-semibold text-gray-700 mb-2"
+                  >
+                    State
+                  </label>
+                  <select
+                    id="location.state"
+                    name="location.state"
+                    value={formData.location.state}
+                    onChange={handleChange}
+                    className={`input-medical ${
+                      errors["location.state"]
+                        ? "border-red-400 focus:border-red-500"
+                        : ""
+                    }`}
+                  >
+                    <option value="">Select State</option>
+                    {states.map((state) => (
+                      <option key={state} value={state}>
+                        {state}
+                      </option>
+                    ))}
+                  </select>
+                  {errors["location.state"] && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {errors["location.state"]}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div>
+                  <label
+                    htmlFor="location.country"
+                    className="block text-sm font-semibold text-gray-700 mb-2"
+                  >
+                    Country
+                  </label>
+                  <input
+                    id="location.country"
+                    name="location.country"
+                    type="text"
+                    value={formData.location.country}
+                    onChange={handleChange}
+                    className="input-medical"
+                    placeholder="United States"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="location.timezone"
+                    className="block text-sm font-semibold text-gray-700 mb-2"
+                  >
+                    Timezone
+                  </label>
+                  <select
+                    id="location.timezone"
+                    name="location.timezone"
+                    value={formData.location.timezone}
+                    onChange={handleChange}
+                    className="input-medical"
+                  >
+                    <option value="America/New_York">Eastern Time (ET)</option>
+                    <option value="America/Chicago">Central Time (CT)</option>
+                    <option value="America/Denver">Mountain Time (MT)</option>
+                    <option value="America/Los_Angeles">
+                      Pacific Time (PT)
+                    </option>
+                    <option value="America/Anchorage">Alaska Time (AKT)</option>
+                    <option value="Pacific/Honolulu">Hawaii Time (HT)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Languages */}
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <h4 className="text-md font-semibold text-gray-800">
+                  Languages
+                </h4>
+                <button
+                  type="button"
+                  onClick={addLanguage}
+                  className="text-sm text-green-600 hover:text-green-700 font-medium"
+                >
+                  + Add Language
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {formData.languages.map((lang, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg"
+                  >
+                    <div className="flex-1">
+                      <select
+                        value={lang.language}
+                        onChange={(e) =>
+                          handleLanguageChange(
+                            index,
+                            "language",
+                            e.target.value
+                          )
+                        }
+                        className="input-medical"
+                      >
+                        <option value="">Select Language</option>
+                        {languages.map((language) => (
+                          <option key={language} value={language}>
+                            {language}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex-1">
+                      <select
+                        value={lang.proficiency}
+                        onChange={(e) =>
+                          handleLanguageChange(
+                            index,
+                            "proficiency",
+                            e.target.value
+                          )
+                        }
+                        className="input-medical"
+                      >
+                        <option value="basic">Basic</option>
+                        <option value="conversational">Conversational</option>
+                        <option value="fluent">Fluent</option>
+                        <option value="native">Native</option>
+                      </select>
+                    </div>
+
+                    {formData.languages.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeLanguage(index)}
+                        className="text-red-500 hover:text-red-700 p-1"
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {errors.languages && (
+                <p className="mt-1 text-sm text-red-600">{errors.languages}</p>
+              )}
+            </div>
+          </div>
+        );
+
+      case 5:
+        return (
+          <div className="space-y-6">
+            <div className="text-center mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Professional Profile
+              </h3>
+              <p className="text-gray-600 text-sm">
+                Complete your professional profile and privacy settings
+              </p>
+            </div>
+
+            {/* Professional Bio */}
+            <div>
+              <label
+                htmlFor="bio"
+                className="block text-sm font-semibold text-gray-700 mb-2"
+              >
+                Professional Bio (Optional)
+              </label>
+              <textarea
+                id="bio"
+                name="bio"
+                rows={5}
+                value={formData.bio}
+                onChange={handleChange}
+                className={`input-medical resize-none ${
+                  errors.bio ? "border-red-400 focus:border-red-500" : ""
+                }`}
+                placeholder="Write a brief professional bio highlighting your experience, expertise, and what makes you unique as a medical professional..."
+                maxLength={2000}
+              />
+              <div className="flex justify-between items-center mt-1">
+                {errors.bio && (
+                  <p className="text-sm text-red-600">{errors.bio}</p>
+                )}
+                <p className="text-xs text-gray-500 ml-auto">
+                  {formData.bio.length}/2000 characters
+                </p>
+              </div>
+            </div>
+
+            {/* Privacy Settings */}
+            <div>
+              <h4 className="text-md font-semibold text-gray-800 mb-3">
+                Privacy Settings
+              </h4>
+
+              <div className="space-y-4 bg-gray-50 rounded-lg p-4">
+                <div>
+                  <label
+                    htmlFor="privacy.profileVisibility"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    Profile Visibility
+                  </label>
+                  <select
+                    id="privacy.profileVisibility"
+                    name="privacy.profileVisibility"
+                    value={formData.privacy.profileVisibility}
+                    onChange={handleChange}
+                    className="input-medical"
+                  >
+                    <option value="public">Public - Visible to everyone</option>
+                    <option value="members_only">
+                      Members Only - Only registered doctors
+                    </option>
+                    <option value="private">
+                      Private - Only direct contacts
+                    </option>
+                  </select>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="privacy.showEmail"
+                      checked={formData.privacy.showEmail}
+                      onChange={handleChange}
+                      className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">
+                      Show email address on profile
+                    </span>
+                  </label>
+
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="privacy.showPhone"
+                      checked={formData.privacy.showPhone}
+                      onChange={handleChange}
+                      className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">
+                      Show phone number on profile
+                    </span>
+                  </label>
+
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="privacy.allowDirectContact"
+                      checked={formData.privacy.allowDirectContact}
+                      onChange={handleChange}
+                      className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">
+                      Allow other doctors to contact me directly
+                    </span>
+                  </label>
+
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="privacy.showLastSeen"
+                      checked={formData.privacy.showLastSeen}
+                      onChange={handleChange}
+                      className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">
+                      Show when I was last active
+                    </span>
+                  </label>
+                </div>
+              </div>
             </div>
 
             {/* Terms and Conditions */}
@@ -843,11 +1345,12 @@ const Register = () => {
                   <li>Maintain professional medical standards</li>
                   <li>Comply with all applicable medical regulations</li>
                   <li>Respect patient confidentiality and HIPAA compliance</li>
+                  <li>Use the platform responsibly and ethically</li>
                 </ul>
               </div>
             </div>
 
-            {/* Final Review */}
+            {/* Account Summary */}
             <div className="bg-blue-50 rounded-xl p-6 border border-blue-200">
               <h4 className="font-semibold text-blue-900 mb-3">
                 Account Summary
@@ -874,6 +1377,15 @@ const Register = () => {
                   <span className="font-medium">Experience:</span>{" "}
                   {formData.yearsOfExperience} years
                 </p>
+                <p>
+                  <span className="font-medium">Location:</span>{" "}
+                  {formData.location.city}, {formData.location.state}
+                </p>
+                <p>
+                  <span className="font-medium">Medical School:</span>{" "}
+                  {formData.medicalSchool.name} (
+                  {formData.medicalSchool.graduationYear})
+                </p>
               </div>
             </div>
           </div>
@@ -886,7 +1398,7 @@ const Register = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
-      {/* Background Pattern & Styles */}
+      {/* Styles */}
       <style jsx>{`
         .pattern-trust {
           background-image: radial-gradient(
@@ -903,23 +1415,12 @@ const Register = () => {
         }
         .input-medical {
           width: 100%;
-          padding-top: 0.875rem;
-          padding-bottom: 0.875rem;
-          padding-right: 1rem;
-          padding-left: 1rem; /* default left padding */
+          padding: 0.875rem 1rem;
           border: 2px solid #e5e7eb;
           border-radius: 0.75rem;
           background: rgba(255, 255, 255, 0.9);
           transition: all 0.3s ease;
           font-size: 0.875rem;
-        }
-
-        .input-medical.pl-10 {
-          padding-left: 2.5rem !important;
-        }
-
-        .input-medical.pl-12 {
-          padding-left: 3rem !important;
         }
         .input-medical:focus {
           outline: none;
@@ -1029,8 +1530,8 @@ const Register = () => {
 
         {/* Progress Indicator */}
         <div className="mb-8 animate-slide-up">
-          <div className="flex items-center justify-between max-w-md mx-auto">
-            {[1, 2, 3].map((step) => (
+          <div className="flex items-center justify-between max-w-2xl mx-auto">
+            {[1, 2, 3, 4, 5].map((step) => (
               <div key={step} className="flex items-center">
                 <div
                   className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-all duration-300 ${
@@ -1055,7 +1556,7 @@ const Register = () => {
                     step
                   )}
                 </div>
-                {step < 3 && (
+                {step < 5 && (
                   <div
                     className={`w-16 h-1 mx-2 transition-all duration-300 ${
                       currentStep > step ? "bg-green-500" : "bg-gray-200"
@@ -1065,10 +1566,12 @@ const Register = () => {
               </div>
             ))}
           </div>
-          <div className="flex justify-between max-w-md mx-auto mt-2 text-sm text-gray-500">
-            <span>Personal Info</span>
+          <div className="flex justify-between max-w-2xl mx-auto mt-2 text-sm text-gray-500">
+            <span>Personal</span>
             <span>Credentials</span>
-            <span>Specialty</span>
+            <span>Education</span>
+            <span>Location</span>
+            <span>Profile</span>
           </div>
         </div>
 

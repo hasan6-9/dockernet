@@ -1,15 +1,53 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Link } from "react-router-dom";
+import {
+  User,
+  Upload,
+  FileText,
+  Search,
+  MessageSquare,
+  TrendingUp,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  XCircle,
+  Star,
+  Eye,
+  Calendar,
+  DollarSign,
+  Award,
+  Users,
+  Settings,
+  HelpCircle,
+  Bell,
+  ArrowRight,
+  ChevronRight,
+  Activity,
+  Shield,
+  Briefcase,
+  GraduationCap,
+  Stethoscope,
+  Plus,
+  Filter,
+  BarChart3,
+  Target,
+} from "lucide-react";
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [stats, setStats] = useState({
-    totalJobs: 12,
-    activeApplications: 5,
-    completedProjects: 28,
-    earnings: 15750,
+  const [dashboardData, setDashboardData] = useState({
+    profileCompletion: 65,
+    unreadNotifications: 3,
+    pendingVerifications: 2,
+    recentActivity: [],
+    stats: {
+      profileViews: 124,
+      applications: 8,
+      projects: 12,
+      earnings: 15750,
+    },
   });
 
   useEffect(() => {
@@ -21,456 +59,344 @@ const Dashboard = () => {
     await logout();
   };
 
-  const getWelcomeMessage = () => {
+  const getGreeting = () => {
     const hour = currentTime.getHours();
-    const greeting =
-      hour < 12
-        ? "Good morning"
-        : hour < 18
-        ? "Good afternoon"
-        : "Good evening";
-    const role = user?.role;
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  };
 
-    switch (role) {
+  const getVerificationBadge = (status) => {
+    const badges = {
+      verified: {
+        color: "bg-emerald-100 text-emerald-800",
+        icon: CheckCircle,
+        text: "Verified",
+      },
+      partial: {
+        color: "bg-yellow-100 text-yellow-800",
+        icon: AlertCircle,
+        text: "Partial Verification",
+      },
+      unverified: {
+        color: "bg-red-100 text-red-800",
+        icon: XCircle,
+        text: "Unverified",
+      },
+      pending: {
+        color: "bg-blue-100 text-blue-800",
+        icon: Clock,
+        text: "Under Review",
+      },
+    };
+    const badge = badges[status] || badges.unverified;
+    const Icon = badge.icon;
+    return (
+      <span
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.color}`}
+      >
+        <Icon className="w-3 h-3 mr-1" />
+        {badge.text}
+      </span>
+    );
+  };
+
+  const getProfileCompletionSteps = () => {
+    const allSteps = [
+      { key: "basic_info", title: "Basic Information", completed: true },
+      {
+        key: "profile_photo",
+        title: "Profile Photo",
+        completed: user?.profilePhoto?.url,
+      },
+      {
+        key: "bio",
+        title: "Professional Bio",
+        completed: user?.bio?.length > 50,
+      },
+      {
+        key: "experience",
+        title: "Experience",
+        completed: user?.experiences?.length > 0,
+      },
+      {
+        key: "skills",
+        title: "Skills & Expertise",
+        completed: user?.skills?.length >= 3,
+      },
+      {
+        key: "certifications",
+        title: "Certifications",
+        completed: user?.certifications?.length > 0,
+      },
+      {
+        key: "documents",
+        title: "Documents",
+        completed: user?.documents?.length > 0,
+      },
+      {
+        key: "availability",
+        title: "Availability",
+        completed: user?.availability?.weeklySchedule,
+      },
+    ];
+
+    const completed = allSteps.filter((step) => step.completed).length;
+    return {
+      steps: allSteps,
+      completion: Math.round((completed / allSteps.length) * 100),
+    };
+  };
+
+  // Role-specific dashboard content
+  const getSeniorDoctorDashboard = () => {
+    const quickActions = [
+      {
+        title: "Post New Job",
+        description: "Create opportunities for junior doctors",
+        icon: Plus,
+        link: "/jobs/create",
+        color: "bg-gradient-to-r from-blue-500 to-blue-600",
+        urgent: false,
+      },
+      {
+        title: "Review Applications",
+        description: "24 new applications pending review",
+        icon: FileText,
+        link: "/applications/review",
+        color: "bg-gradient-to-r from-amber-500 to-amber-600",
+        urgent: true,
+        badge: "24",
+      },
+      {
+        title: "Find Doctors",
+        description: "Search qualified junior doctors",
+        icon: Search,
+        link: "/search",
+        color: "bg-gradient-to-r from-emerald-500 to-emerald-600",
+        urgent: false,
+      },
+      {
+        title: "Messages",
+        description: "3 new messages from candidates",
+        icon: MessageSquare,
+        link: "/messages",
+        color: "bg-gradient-to-r from-purple-500 to-purple-600",
+        urgent: true,
+        badge: "3",
+      },
+    ];
+
+    const stats = [
+      {
+        label: "Active Jobs",
+        value: "12",
+        icon: Briefcase,
+        trend: "+2 this month",
+      },
+      {
+        label: "Applications",
+        value: "89",
+        icon: FileText,
+        trend: "+15 this week",
+      },
+      {
+        label: "Hired Doctors",
+        value: "8",
+        icon: Users,
+        trend: "2 this month",
+      },
+      {
+        label: "Success Rate",
+        value: "94%",
+        icon: Target,
+        trend: "+3% improvement",
+      },
+    ];
+
+    return { quickActions, stats, roleSpecific: true };
+  };
+
+  const getJuniorDoctorDashboard = () => {
+    const quickActions = [
+      {
+        title: "Browse Jobs",
+        description: "47 new opportunities available",
+        icon: Search,
+        link: "/jobs",
+        color: "bg-gradient-to-r from-blue-500 to-blue-600",
+        urgent: false,
+        badge: "47",
+      },
+      {
+        title: "My Applications",
+        description: "5 applications awaiting response",
+        icon: FileText,
+        link: "/applications",
+        color: "bg-gradient-to-r from-amber-500 to-amber-600",
+        urgent: true,
+        badge: "5",
+      },
+      {
+        title: "Complete Profile",
+        description: `${
+          100 - getProfileCompletionSteps().completion
+        }% remaining to complete`,
+        icon: User,
+        link: "/profile",
+        color: "bg-gradient-to-r from-emerald-500 to-emerald-600",
+        urgent: getProfileCompletionSteps().completion < 80,
+      },
+      {
+        title: "Skill Assessment",
+        description: "Take tests to verify your expertise",
+        icon: Award,
+        link: "/assessments",
+        color: "bg-gradient-to-r from-purple-500 to-purple-600",
+        urgent: false,
+      },
+    ];
+
+    const stats = [
+      {
+        label: "Profile Views",
+        value: "124",
+        icon: Eye,
+        trend: "+18 this week",
+      },
+      { label: "Applications", value: "8", icon: FileText, trend: "3 pending" },
+      {
+        label: "Success Rate",
+        value: "75%",
+        icon: Target,
+        trend: "Above average",
+      },
+      {
+        label: "Earnings",
+        value: "$2,850",
+        icon: DollarSign,
+        trend: "This month",
+      },
+    ];
+
+    return { quickActions, stats, roleSpecific: true };
+  };
+
+  const getAdminDashboard = () => {
+    const quickActions = [
+      {
+        title: "Pending Verifications",
+        description: "15 doctors awaiting verification",
+        icon: Shield,
+        link: "/admin/verifications",
+        color: "bg-gradient-to-r from-red-500 to-red-600",
+        urgent: true,
+        badge: "15",
+      },
+      {
+        title: "User Management",
+        description: "Manage registered doctors",
+        icon: Users,
+        link: "/admin/users",
+        color: "bg-gradient-to-r from-blue-500 to-blue-600",
+        urgent: false,
+      },
+      {
+        title: "Platform Analytics",
+        description: "View system performance metrics",
+        icon: BarChart3,
+        link: "/admin/analytics",
+        color: "bg-gradient-to-r from-emerald-500 to-emerald-600",
+        urgent: false,
+      },
+      {
+        title: "Support Tickets",
+        description: "7 open support requests",
+        icon: HelpCircle,
+        link: "/admin/support",
+        color: "bg-gradient-to-r from-amber-500 to-amber-600",
+        urgent: true,
+        badge: "7",
+      },
+    ];
+
+    const stats = [
+      {
+        label: "Total Users",
+        value: "1,247",
+        icon: Users,
+        trend: "+23 this week",
+      },
+      { label: "Pending Reviews", value: "15", icon: Clock, trend: "2 urgent" },
+      {
+        label: "Active Jobs",
+        value: "89",
+        icon: Briefcase,
+        trend: "+12 this week",
+      },
+      {
+        label: "Platform Health",
+        value: "98.9%",
+        icon: Activity,
+        trend: "All systems operational",
+      },
+    ];
+
+    return { quickActions, stats, roleSpecific: true };
+  };
+
+  // Get role-specific data
+  const getDashboardContent = () => {
+    switch (user?.role) {
       case "senior":
-        return `${greeting}, Dr. ${user?.firstName}! Ready to find exceptional junior doctors for your practice?`;
+        return getSeniorDoctorDashboard();
       case "junior":
-        return `${greeting}, Dr. ${user?.firstName}! Discover new opportunities to advance your medical career.`;
+        return getJuniorDoctorDashboard();
       case "admin":
-        return `${greeting}! Welcome to your administrative dashboard.`;
+        return getAdminDashboard();
       default:
-        return `${greeting}! Welcome to Doconnect.`;
+        return getJuniorDoctorDashboard();
     }
   };
 
-  const getDashboardCards = () => {
-    const role = user?.role;
-
-    if (role === "senior") {
-      return [
-        {
-          title: "Post New Job",
-          description: "Create opportunities for junior doctors",
-          link: "/jobs/create",
-          icon: (
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-              />
-            </svg>
-          ),
-          gradient: "from-primary-500 to-primary-600",
-          stats: "12 Active Jobs",
-        },
-        {
-          title: "Find Doctors",
-          description: "Search and discover qualified junior doctors",
-          link: "/search",
-          icon: (
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-          ),
-          gradient: "from-trust-500 to-trust-600",
-          stats: "200+ Available",
-        },
-        {
-          title: "Manage Jobs",
-          description: "Review applications and manage postings",
-          link: "/jobs/my-jobs",
-          icon: (
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-              />
-            </svg>
-          ),
-          gradient: "from-medical-500 to-medical-600",
-          stats: "24 Applications",
-        },
-        {
-          title: "Messages",
-          description: "Communicate with candidates",
-          link: "/messages",
-          icon: (
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-              />
-            </svg>
-          ),
-          gradient: "from-accent-500 to-accent-600",
-          stats: "3 New Messages",
-        },
-      ];
-    } else if (role === "junior") {
-      return [
-        {
-          title: "Find Opportunities",
-          description: "Search available positions and projects",
-          link: "/search",
-          icon: (
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-          ),
-          gradient: "from-primary-500 to-primary-600",
-          stats: "47 New Jobs",
-        },
-        {
-          title: "Browse Jobs",
-          description: "Discover exciting medical opportunities",
-          link: "/jobs",
-          icon: (
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2-2v2m8 0V6a2 2 0 00-2 2h-4a2 2 0 00-2-2V4"
-              />
-            </svg>
-          ),
-          gradient: "from-medical-500 to-medical-600",
-          stats: "5 Active Apps",
-        },
-        {
-          title: "My Applications",
-          description: "Track your job applications and status",
-          link: "/applications",
-          icon: (
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
-              />
-            </svg>
-          ),
-          gradient: "from-accent-500 to-accent-600",
-          stats: "3 Pending",
-        },
-        {
-          title: "My Profile",
-          description: "Update your professional information",
-          link: "/profile",
-          icon: (
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-              />
-            </svg>
-          ),
-          gradient: "from-trust-500 to-trust-600",
-          stats: "85% Complete",
-        },
-      ];
-    } else if (role === "admin") {
-      return [
-        {
-          title: "Admin Dashboard",
-          description: "Access comprehensive admin controls",
-          link: "/admin",
-          icon: (
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-              />
-            </svg>
-          ),
-          gradient: "from-error-500 to-error-600",
-          stats: "15 Pending Verifications",
-        },
-        {
-          title: "User Management",
-          description: "Verify and manage doctor accounts",
-          link: "/admin",
-          icon: (
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"
-              />
-            </svg>
-          ),
-          gradient: "from-primary-500 to-primary-600",
-          stats: "1.2K Active Users",
-        },
-        {
-          title: "Platform Analytics",
-          description: "Monitor platform performance and metrics",
-          link: "/admin",
-          icon: (
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-              />
-            </svg>
-          ),
-          gradient: "from-warning-500 to-warning-600",
-          stats: "↑ 23% Growth",
-        },
-        {
-          title: "Doctor Search",
-          description: "Browse all registered doctors on platform",
-          link: "/search",
-          icon: (
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-              />
-            </svg>
-          ),
-          gradient: "from-medical-500 to-medical-600",
-          stats: "All Users",
-        },
-      ];
-    } else {
-      return [
-        {
-          title: "User Management",
-          description: "Verify and manage doctor accounts",
-          link: "/admin/users",
-          icon: (
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"
-              />
-            </svg>
-          ),
-          gradient: "from-error-500 to-error-600",
-          stats: "15 Pending",
-        },
-        {
-          title: "Platform Analytics",
-          description: "Monitor platform performance",
-          link: "/admin/analytics",
-          icon: (
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-              />
-            </svg>
-          ),
-          gradient: "from-primary-500 to-primary-600",
-          stats: "1.2K Active Users",
-        },
-      ];
-    }
-  };
-
-  const getQuickStats = () => {
-    const role = user?.role;
-    if (role === "senior") {
-      return [
-        {
-          label: "Active Jobs",
-          value: stats.totalJobs,
-          icon: "💼",
-          color: "text-primary-600",
-        },
-        {
-          label: "Applications",
-          value: stats.activeApplications,
-          icon: "📋",
-          color: "text-medical-600",
-        },
-        {
-          label: "Hired Doctors",
-          value: 8,
-          icon: "👨‍⚕️",
-          color: "text-success-600",
-        },
-        {
-          label: "This Month",
-          value: `$${stats.earnings.toLocaleString()}`,
-          icon: "💰",
-          color: "text-warning-600",
-        },
-      ];
-    } else if (role === "junior") {
-      return [
-        {
-          label: "Applications",
-          value: stats.activeApplications,
-          icon: "📝",
-          color: "text-primary-600",
-        },
-        {
-          label: "Interviews",
-          value: 3,
-          icon: "🎯",
-          color: "text-medical-600",
-        },
-        {
-          label: "Completed",
-          value: stats.completedProjects,
-          icon: "✅",
-          color: "text-success-600",
-        },
-        {
-          label: "Earnings",
-          value: `$${stats.earnings.toLocaleString()}`,
-          icon: "💰",
-          color: "text-warning-600",
-        },
-      ];
-    }
-    return [];
-  };
+  const { quickActions, stats } = getDashboardContent();
+  const { steps: profileSteps, completion: profileCompletion } =
+    getProfileCompletionSteps();
+  const incompleteSteps = profileSteps
+    .filter((step) => !step.completed)
+    .slice(0, 3);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-trust-50 via-white to-medical-50">
-      {/* Background Pattern */}
-      <div className="fixed inset-0 pattern-trust opacity-30 pointer-events-none"></div>
-
-      {/* Navigation Header */}
-      <nav className="relative bg-white/80 backdrop-blur-lg border-b border-white/20 shadow-sm">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
+      {/* Header */}
+      <header className="bg-white/80 backdrop-blur-lg border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
+          <div className="flex items-center justify-between h-16">
+            {/* Logo */}
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <div className="w-10 h-10 bg-gradient-medical rounded-xl flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">D</span>
+              <Link to="/" className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl flex items-center justify-center">
+                  <Stethoscope className="w-6 h-6 text-white" />
                 </div>
-                <span className="text-2xl font-bold text-gradient-medical">
+                <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
                   Doconnect
                 </span>
-              </div>
+              </Link>
 
-              <div className="hidden sm:flex items-center space-x-2">
-                <div
-                  className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                    user?.role === "senior"
-                      ? "badge-verified"
-                      : user?.role === "junior"
-                      ? "badge-pending"
-                      : "bg-trust-100 text-trust-800"
-                  }`}
-                >
-                  {user?.role === "senior"
-                    ? "👨‍⚕️ Senior Doctor"
-                    : user?.role === "junior"
-                    ? "👩‍⚕️ Junior Doctor"
-                    : "⚙️ Administrator"}
-                </div>
+              <div className="hidden sm:flex items-center">
+                {getVerificationBadge(
+                  user?.verificationStatus?.overall || "unverified"
+                )}
               </div>
             </div>
 
+            {/* User Menu */}
             <div className="flex items-center space-x-4">
-              <div className="hidden md:flex items-center space-x-3 text-sm text-trust-600">
+              <div className="hidden md:flex items-center space-x-3 text-sm text-slate-600">
+                <Calendar className="w-4 h-4" />
                 <span>{currentTime.toLocaleDateString()}</span>
-                <span className="text-trust-400">•</span>
+                <span className="text-slate-400">•</span>
+                <Clock className="w-4 h-4" />
                 <span>
                   {currentTime.toLocaleTimeString([], {
                     hour: "2-digit",
@@ -479,25 +405,45 @@ const Dashboard = () => {
                 </span>
               </div>
 
+              <button className="relative p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors">
+                <Bell className="w-5 h-5" />
+                {dashboardData.unreadNotifications > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                    {dashboardData.unreadNotifications}
+                  </span>
+                )}
+              </button>
+
               <Link
                 to="/profile"
-                className="flex items-center space-x-2 bg-white/50 hover:bg-white/80 px-3 py-2 rounded-lg transition-all duration-300 group"
+                className="flex items-center space-x-3 bg-white hover:bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 transition-all duration-200 group"
               >
-                <div className="w-8 h-8 bg-gradient-medical rounded-lg flex items-center justify-center text-white text-sm font-semibold">
+                <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg flex items-center justify-center text-white text-sm font-semibold">
                   {user?.firstName?.[0]}
                   {user?.lastName?.[0]}
                 </div>
-                <span className="hidden sm:block text-trust-700 font-medium group-hover:text-trust-900">
-                  Dr. {user?.firstName}
-                </span>
+                <div className="hidden sm:block">
+                  <p className="text-sm font-medium text-slate-900 group-hover:text-blue-600">
+                    Dr. {user?.firstName} {user?.lastName}
+                  </p>
+                  <p className="text-xs text-slate-500 capitalize">
+                    {user?.role === "senior"
+                      ? "Senior Doctor"
+                      : user?.role === "junior"
+                      ? "Junior Doctor"
+                      : "Administrator"}
+                  </p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
               </Link>
 
               <button
                 onClick={handleLogout}
-                className="btn-ghost-enhanced text-sm"
+                className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                title="Logout"
               >
                 <svg
-                  className="w-4 h-4 mr-1"
+                  className="w-5 h-5"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -509,578 +455,663 @@ const Dashboard = () => {
                     d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
                   />
                 </svg>
-                Logout
               </button>
             </div>
           </div>
         </div>
-      </nav>
+      </header>
 
-      {/* Main Content */}
-      <main className="relative max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         {/* Welcome Section */}
-        <div className="mb-8 animate-fade-in-up">
-          <div className="card-glass">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-              <div className="mb-4 md:mb-0">
-                <h1 className="text-2xl md:text-3xl font-bold text-trust-900 mb-2">
-                  {getWelcomeMessage()}
+        <div className="mb-8">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+              <div className="mb-4 lg:mb-0">
+                <h1 className="text-3xl font-bold text-slate-900 mb-2">
+                  {getGreeting()}, Dr. {user?.firstName}!
                 </h1>
-                <p className="text-trust-600">
+                <p className="text-slate-600 text-lg">
                   {user?.role === "senior"
-                    ? "Manage your practice and connect with talented junior doctors."
+                    ? "Ready to find exceptional junior doctors for your practice?"
                     : user?.role === "junior"
-                    ? "Explore opportunities and advance your medical career."
-                    : "Monitor platform activities and manage user accounts."}
+                    ? "Discover new opportunities to advance your medical career."
+                    : "Welcome to your administrative dashboard."}
                 </p>
               </div>
 
-              {/* Account Status Indicators */}
-              <div className="flex flex-wrap gap-2">
-                <div
-                  className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                    user?.isVerified ? "badge-verified" : "badge-pending"
-                  }`}
-                >
-                  {user?.isVerified ? (
-                    <>
-                      <svg
-                        className="w-3 h-3 inline mr-1"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      Verified
-                    </>
-                  ) : (
-                    <>
-                      <svg
-                        className="w-3 h-3 inline mr-1"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      Pending Verification
-                    </>
-                  )}
+              {/* Profile Completion - Only for non-admin users */}
+              {user?.role !== "admin" && profileCompletion < 100 && (
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-blue-900">
+                      Profile Completion
+                    </span>
+                    <span className="text-sm font-bold text-blue-600">
+                      {profileCompletion}%
+                    </span>
+                  </div>
+                  <div className="w-48 bg-white rounded-full h-2 mb-3">
+                    <div
+                      className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${profileCompletion}%` }}
+                    ></div>
+                  </div>
+                  <Link
+                    to="/profile"
+                    className="text-sm font-medium text-blue-600 hover:text-blue-700 flex items-center"
+                  >
+                    Complete profile <ArrowRight className="w-3 h-3 ml-1" />
+                  </Link>
                 </div>
-
-                <div
-                  className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                    user?.subscriptionStatus === "active"
-                      ? "badge-verified"
-                      : "bg-error-100 text-error-800"
-                  }`}
-                >
-                  {user?.subscriptionStatus === "active" ? (
-                    <>
-                      <svg
-                        className="w-3 h-3 inline mr-1"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Active Plan
-                    </>
-                  ) : (
-                    <>
-                      <svg
-                        className="w-3 h-3 inline mr-1"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      Inactive
-                    </>
-                  )}
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Quick Stats */}
-        {user?.role !== "admin" && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8 animate-fade-in-up animation-delay-200">
-            {getQuickStats().map((stat, index) => (
-              <div key={index} className="card-trust text-center">
-                <div className="text-2xl mb-2">{stat.icon}</div>
-                <div className={`text-2xl font-bold ${stat.color} mb-1`}>
-                  {stat.value}
-                </div>
-                <div className="text-trust-600 text-sm font-medium">
-                  {stat.label}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Quick Actions Grid */}
+        {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {getDashboardCards().map((card, index) => (
-            <Link
-              key={index}
-              to={card.link}
-              className="group card-medical hover:scale-105 transition-all duration-300 animate-fade-in-up"
-              style={{ animationDelay: `${(index + 3) * 100}ms` }}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div
-                  className={`w-12 h-12 bg-gradient-to-r ${card.gradient} rounded-xl flex items-center justify-center text-white group-hover:shadow-lg transition-all duration-300`}
-                >
-                  {card.icon}
+          {stats.map((stat, index) => {
+            const Icon = stat.icon;
+            return (
+              <div
+                key={index}
+                className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-600 mb-1">
+                      {stat.label}
+                    </p>
+                    <p className="text-2xl font-bold text-slate-900">
+                      {stat.value}
+                    </p>
+                    <p className="text-xs text-emerald-600 font-medium mt-1">
+                      {stat.trend}
+                    </p>
+                  </div>
+                  <div className="w-12 h-12 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center">
+                    <Icon className="w-6 h-6 text-blue-600" />
+                  </div>
                 </div>
-                <svg
-                  className="w-5 h-5 text-trust-400 group-hover:text-trust-600 group-hover:translate-x-1 transition-all duration-300"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
               </div>
-
-              <h3 className="text-lg font-semibold text-trust-900 mb-2 group-hover:text-medical-600 transition-colors">
-                {card.title}
-              </h3>
-              <p className="text-trust-600 text-sm mb-3 leading-relaxed">
-                {card.description}
-              </p>
-
-              {card.stats && (
-                <div className="flex items-center justify-between pt-3 border-t border-trust-100">
-                  <span className="text-xs text-trust-500 font-medium">
-                    {card.stats}
-                  </span>
-                  <div className="w-2 h-2 bg-medical-400 rounded-full animate-pulse-soft"></div>
-                </div>
-              )}
-            </Link>
-          ))}
+            );
+          })}
         </div>
 
-        {/* Recent Activity & Notifications */}
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* Recent Activity */}
-          <div className="lg:col-span-2 animate-fade-in-up animation-delay-600">
-            <div className="card-medical">
+          {/* Main Content */}
+          <div className="lg:col-span-2 space-y-8">
+            {/* Quick Actions */}
+            <div>
+              <h2 className="text-xl font-semibold text-slate-900 mb-6">
+                Quick Actions
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {quickActions.map((action, index) => {
+                  const Icon = action.icon;
+                  return (
+                    <Link
+                      key={index}
+                      to={action.link}
+                      className="group relative bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-lg transition-all duration-200 hover:scale-[1.02]"
+                    >
+                      {action.urgent && (
+                        <div className="absolute top-3 right-3">
+                          <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between mb-4">
+                        <div
+                          className={`w-12 h-12 ${action.color} rounded-xl flex items-center justify-center text-white shadow-lg`}
+                        >
+                          <Icon className="w-6 h-6" />
+                        </div>
+                        {action.badge && (
+                          <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-1 rounded-full">
+                            {action.badge}
+                          </span>
+                        )}
+                      </div>
+
+                      <h3 className="text-lg font-semibold text-slate-900 mb-2 group-hover:text-blue-600 transition-colors">
+                        {action.title}
+                      </h3>
+                      <p className="text-slate-600 text-sm mb-4">
+                        {action.description}
+                      </p>
+
+                      <div className="flex items-center text-blue-600 font-medium text-sm">
+                        <span>Take action</span>
+                        <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Recent Activity */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-trust-900">
+                <h2 className="text-xl font-semibold text-slate-900">
                   Recent Activity
                 </h2>
                 <Link
                   to="/activity"
-                  className="text-medical-600 hover:text-medical-700 text-sm font-medium"
+                  className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center"
                 >
-                  View All
+                  View all <ChevronRight className="w-4 h-4 ml-1" />
                 </Link>
               </div>
 
               <div className="space-y-4">
-                {user?.role === "senior" ? (
+                {/* Sample activities based on role */}
+                {user?.role === "senior" && (
                   <>
-                    <div className="flex items-start space-x-3 p-3 bg-trust-50 rounded-lg">
-                      <div className="w-8 h-8 bg-medical-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <svg
-                          className="w-4 h-4 text-medical-600"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
+                    <div className="flex items-start space-x-4 p-3 bg-slate-50 rounded-lg">
+                      <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <CheckCircle className="w-4 h-4 text-green-600" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-trust-900 font-medium">
-                          New application received for "Cardiology Consultation
-                          Support"
+                        <p className="text-sm font-medium text-slate-900">
+                          New application received
                         </p>
-                        <p className="text-xs text-trust-500 mt-1">
-                          Dr. Sarah Johnson • 2 hours ago
+                        <p className="text-xs text-slate-500">
+                          Dr. Sarah Johnson applied for "Cardiology
+                          Consultation" • 2 hours ago
                         </p>
                       </div>
                     </div>
-
-                    <div className="flex items-start space-x-3 p-3 bg-primary-50 rounded-lg">
-                      <div className="w-8 h-8 bg-primary-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <svg
-                          className="w-4 h-4 text-primary-600"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
+                    <div className="flex items-start space-x-4 p-3 bg-slate-50 rounded-lg">
+                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <MessageSquare className="w-4 h-4 text-blue-600" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-trust-900 font-medium">
-                          Job posting "Emergency Medicine Support" is expiring
-                          in 3 days
+                        <p className="text-sm font-medium text-slate-900">
+                          Message from Dr. Michael Chen
                         </p>
-                        <p className="text-xs text-trust-500 mt-1">
-                          5 hours ago
+                        <p className="text-xs text-slate-500">
+                          Regarding the "Emergency Medicine Support" project • 5
+                          hours ago
                         </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start space-x-3 p-3 bg-success-50 rounded-lg">
-                      <div className="w-8 h-8 bg-success-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <svg
-                          className="w-4 h-4 text-success-600"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-trust-900 font-medium">
-                          Dr. Michael Chen completed "Radiology Review" project
-                          successfully
-                        </p>
-                        <p className="text-xs text-trust-500 mt-1">Yesterday</p>
                       </div>
                     </div>
                   </>
-                ) : user?.role === "junior" ? (
+                )}
+
+                {user?.role === "junior" && (
                   <>
-                    <div className="flex items-start space-x-3 p-3 bg-medical-50 rounded-lg">
-                      <div className="w-8 h-8 bg-medical-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <svg
-                          className="w-4 h-4 text-medical-600"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
-                        </svg>
+                    <div className="flex items-start space-x-4 p-3 bg-slate-50 rounded-lg">
+                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Eye className="w-4 h-4 text-blue-600" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-trust-900 font-medium">
-                          Your application for "Pediatric Consultation" was
-                          reviewed
+                        <p className="text-sm font-medium text-slate-900">
+                          Profile viewed by senior doctor
                         </p>
-                        <p className="text-xs text-trust-500 mt-1">
-                          Dr. Amanda Wilson • 1 hour ago
+                        <p className="text-xs text-slate-500">
+                          Dr. Amanda Wilson viewed your profile • 1 hour ago
                         </p>
                       </div>
                     </div>
-
-                    <div className="flex items-start space-x-3 p-3 bg-primary-50 rounded-lg">
-                      <div className="w-8 h-8 bg-primary-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <svg
-                          className="w-4 h-4 text-primary-600"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
+                    <div className="flex items-start space-x-4 p-3 bg-slate-50 rounded-lg">
+                      <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Star className="w-4 h-4 text-green-600" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-trust-900 font-medium">
-                          New matching opportunity: "Dermatology Research
-                          Assistant"
+                        <p className="text-sm font-medium text-slate-900">
+                          New matching opportunity
                         </p>
-                        <p className="text-xs text-trust-500 mt-1">
+                        <p className="text-xs text-slate-500">
+                          "Pediatric Consultation Support" matches your skills •
                           3 hours ago
                         </p>
                       </div>
                     </div>
+                  </>
+                )}
 
-                    <div className="flex items-start space-x-3 p-3 bg-success-50 rounded-lg">
-                      <div className="w-8 h-8 bg-success-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <svg
-                          className="w-4 h-4 text-success-600"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
-                          <path
-                            fillRule="evenodd"
-                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
+                {user?.role === "admin" && (
+                  <>
+                    <div className="flex items-start space-x-4 p-3 bg-slate-50 rounded-lg">
+                      <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Clock className="w-4 h-4 text-amber-600" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-trust-900 font-medium">
-                          Payment received: $850 for "Telemedicine Consultation"
+                        <p className="text-sm font-medium text-slate-900">
+                          New verification request
                         </p>
-                        <p className="text-xs text-trust-500 mt-1">
-                          2 days ago
+                        <p className="text-xs text-slate-500">
+                          Dr. Jennifer Lopez submitted documents for review • 30
+                          minutes ago
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start space-x-4 p-3 bg-slate-50 rounded-lg">
+                      <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <HelpCircle className="w-4 h-4 text-red-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-900">
+                          Support ticket opened
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          User reported login issues #ST-2024-001 • 2 hours ago
                         </p>
                       </div>
                     </div>
                   </>
-                ) : (
-                  <div className="text-center py-8 text-trust-500">
-                    <svg
-                      className="w-12 h-12 mx-auto mb-4 text-trust-300"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
-                      />
-                    </svg>
-                    <p>No recent activity to display</p>
-                  </div>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Notifications & Quick Links */}
-          <div className="space-y-6 animate-fade-in-up animation-delay-800">
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Profile Completion (for non-admin users) */}
+            {user?.role !== "admin" && profileCompletion < 100 && (
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <h3 className="text-lg font-semibold text-slate-900 mb-4">
+                  Complete Your Profile
+                </h3>
+                <div className="space-y-3">
+                  {incompleteSteps.map((step, index) => (
+                    <Link
+                      key={step.key}
+                      to="/profile"
+                      className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors group"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="w-6 h-6 border-2 border-slate-300 rounded-full flex items-center justify-center">
+                          {step.completed ? (
+                            <CheckCircle className="w-4 h-4 text-green-600" />
+                          ) : (
+                            <div className="w-2 h-2 bg-slate-300 rounded-full"></div>
+                          )}
+                        </div>
+                        <span className="text-sm font-medium text-slate-900">
+                          {step.title}
+                        </span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Notifications */}
-            <div className="card-trust">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-trust-900">
+                <h3 className="text-lg font-semibold text-slate-900">
                   Notifications
                 </h3>
-                <span className="bg-medical-100 text-medical-800 text-xs font-medium px-2 py-1 rounded-full">
-                  3 New
+                <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded-full">
+                  {dashboardData.unreadNotifications} New
                 </span>
               </div>
 
               <div className="space-y-3">
-                <div className="flex items-center space-x-3 p-2 hover:bg-trust-50 rounded-lg transition-colors">
-                  <div className="w-2 h-2 bg-medical-400 rounded-full flex-shrink-0"></div>
+                <div className="flex items-start space-x-3 p-2 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer">
+                  <div className="w-2 h-2 bg-blue-400 rounded-full flex-shrink-0 mt-2"></div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-trust-900 font-medium truncate">
+                    <p className="text-sm font-medium text-slate-900">
                       Profile verification update
                     </p>
-                    <p className="text-xs text-trust-500">2 minutes ago</p>
+                    <p className="text-xs text-slate-500">2 minutes ago</p>
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-3 p-2 hover:bg-trust-50 rounded-lg transition-colors">
-                  <div className="w-2 h-2 bg-primary-400 rounded-full flex-shrink-0"></div>
+                <div className="flex items-start space-x-3 p-2 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer">
+                  <div className="w-2 h-2 bg-green-400 rounded-full flex-shrink-0 mt-2"></div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-trust-900 font-medium truncate">
+                    <p className="text-sm font-medium text-slate-900">
                       New message received
                     </p>
-                    <p className="text-xs text-trust-500">1 hour ago</p>
+                    <p className="text-xs text-slate-500">1 hour ago</p>
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-3 p-2 hover:bg-trust-50 rounded-lg transition-colors">
-                  <div className="w-2 h-2 bg-warning-400 rounded-full flex-shrink-0"></div>
+                <div className="flex items-start space-x-3 p-2 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer">
+                  <div className="w-2 h-2 bg-amber-400 rounded-full flex-shrink-0 mt-2"></div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-trust-900 font-medium truncate">
-                      Subscription renewal reminder
+                    <p className="text-sm font-medium text-slate-900">
+                      Document approval needed
                     </p>
-                    <p className="text-xs text-trust-500">3 hours ago</p>
+                    <p className="text-xs text-slate-500">3 hours ago</p>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-4 pt-4 border-t border-trust-100">
+              <div className="mt-4 pt-4 border-t border-slate-100">
                 <Link
                   to="/notifications"
-                  className="text-medical-600 hover:text-medical-700 text-sm font-medium"
+                  className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center"
                 >
-                  View all notifications →
+                  View all notifications <ArrowRight className="w-3 h-3 ml-1" />
                 </Link>
               </div>
             </div>
 
             {/* Quick Links */}
-            <div className="card-medical">
-              <h3 className="text-lg font-semibold text-trust-900 mb-4">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <h3 className="text-lg font-semibold text-slate-900 mb-4">
                 Quick Links
               </h3>
 
               <div className="space-y-2">
                 <Link
-                  to="/help"
-                  className="flex items-center justify-between p-2 hover:bg-medical-50 rounded-lg transition-colors group"
+                  to="/profile"
+                  className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-lg transition-colors group"
                 >
                   <div className="flex items-center space-x-3">
-                    <svg
-                      className="w-4 h-4 text-trust-500 group-hover:text-medical-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                    <span className="text-sm text-trust-700 group-hover:text-trust-900">
-                      Help Center
+                    <User className="w-4 h-4 text-slate-500 group-hover:text-blue-600" />
+                    <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900">
+                      My Profile
                     </span>
                   </div>
-                  <svg
-                    className="w-4 h-4 text-trust-400 group-hover:text-trust-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
                 </Link>
 
                 <Link
                   to="/settings"
-                  className="flex items-center justify-between p-2 hover:bg-medical-50 rounded-lg transition-colors group"
+                  className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-lg transition-colors group"
                 >
                   <div className="flex items-center space-x-3">
-                    <svg
-                      className="w-4 h-4 text-trust-500 group-hover:text-medical-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                    </svg>
-                    <span className="text-sm text-trust-700 group-hover:text-trust-900">
-                      Account Settings
+                    <Settings className="w-4 h-4 text-slate-500 group-hover:text-blue-600" />
+                    <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900">
+                      Settings
                     </span>
                   </div>
-                  <svg
-                    className="w-4 h-4 text-trust-400 group-hover:text-trust-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
                 </Link>
 
                 <Link
-                  to="/billing"
-                  className="flex items-center justify-between p-2 hover:bg-medical-50 rounded-lg transition-colors group"
+                  to="/help"
+                  className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-lg transition-colors group"
                 >
                   <div className="flex items-center space-x-3">
-                    <svg
-                      className="w-4 h-4 text-trust-500 group-hover:text-medical-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
-                      />
-                    </svg>
-                    <span className="text-sm text-trust-700 group-hover:text-trust-900">
-                      Billing & Payments
+                    <HelpCircle className="w-4 h-4 text-slate-500 group-hover:text-blue-600" />
+                    <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900">
+                      Help Center
                     </span>
                   </div>
-                  <svg
-                    className="w-4 h-4 text-trust-400 group-hover:text-trust-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
                 </Link>
+
+                {user?.role !== "admin" && (
+                  <Link
+                    to="/billing"
+                    className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-lg transition-colors group"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <DollarSign className="w-4 h-4 text-slate-500 group-hover:text-blue-600" />
+                      <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900">
+                        Billing & Plans
+                      </span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
+                  </Link>
+                )}
               </div>
             </div>
 
-            {/* Upgrade Notice (if not premium) */}
-            {user?.subscriptionStatus !== "active" && (
-              <div className="card-glass bg-gradient-to-r from-medical-500/10 to-primary-500/10 border-medical-200">
-                <div className="text-center">
-                  <div className="w-12 h-12 bg-gradient-medical rounded-full flex items-center justify-center mx-auto mb-3">
-                    <svg
-                      className="w-6 h-6 text-white"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M13 10V3L4 14h7v7l9-11h-7z"
-                      />
-                    </svg>
+            {/* Verification Status (for non-admin users) */}
+            {user?.role !== "admin" &&
+              user?.verificationStatus?.overall !== "verified" && (
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-6">
+                  <div className="flex items-start space-x-4">
+                    <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Shield className="w-4 h-4 text-amber-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-amber-900 mb-2">
+                        Complete Verification
+                      </h3>
+                      <p className="text-sm text-amber-700 mb-4">
+                        Get verified to access all platform features and build
+                        trust with other professionals.
+                      </p>
+
+                      <div className="space-y-2 mb-4">
+                        {user?.verificationStatus?.identity !== "verified" && (
+                          <div className="flex items-center space-x-2">
+                            <div className="w-4 h-4 border-2 border-amber-400 rounded-full flex items-center justify-center">
+                              <div className="w-1.5 h-1.5 bg-amber-400 rounded-full"></div>
+                            </div>
+                            <span className="text-sm text-amber-800">
+                              Identity verification pending
+                            </span>
+                          </div>
+                        )}
+
+                        {user?.verificationStatus?.medical_license !==
+                          "verified" && (
+                          <div className="flex items-center space-x-2">
+                            <div className="w-4 h-4 border-2 border-amber-400 rounded-full flex items-center justify-center">
+                              <div className="w-1.5 h-1.5 bg-amber-400 rounded-full"></div>
+                            </div>
+                            <span className="text-sm text-amber-800">
+                              Medical license verification pending
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <Link
+                        to="/profile?tab=documents"
+                        className="inline-flex items-center px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700 transition-colors"
+                      >
+                        Upload Documents <Upload className="w-3 h-3 ml-1" />
+                      </Link>
+                    </div>
                   </div>
-                  <h3 className="text-lg font-semibold text-trust-900 mb-2">
+                </div>
+              )}
+
+            {/* Subscription Upgrade (for free/basic users) */}
+            {user?.subscription?.plan === "free" && user?.role !== "admin" && (
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6">
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <TrendingUp className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-blue-900 mb-2">
                     Upgrade to Premium
                   </h3>
-                  <p className="text-sm text-trust-600 mb-4">
-                    Unlock advanced features and priority support
+                  <p className="text-sm text-blue-700 mb-4">
+                    Access advanced features, priority support, and unlimited
+                    opportunities.
                   </p>
-                  <Link to="/subscription" className="btn-medical text-sm">
-                    Learn More
+                  <div className="space-y-2 mb-4 text-xs text-blue-600">
+                    <div className="flex items-center justify-center space-x-1">
+                      <CheckCircle className="w-3 h-3" />
+                      <span>Unlimited job applications</span>
+                    </div>
+                    <div className="flex items-center justify-center space-x-1">
+                      <CheckCircle className="w-3 h-3" />
+                      <span>Advanced search filters</span>
+                    </div>
+                    <div className="flex items-center justify-center space-x-1">
+                      <CheckCircle className="w-3 h-3" />
+                      <span>Priority customer support</span>
+                    </div>
+                  </div>
+                  <Link
+                    to="/subscription"
+                    className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Upgrade Now <ArrowRight className="w-3 h-3 ml-1" />
                   </Link>
                 </div>
               </div>
             )}
+
+            {/* Success Story/Achievement (for verified users) */}
+            {user?.verificationStatus?.overall === "verified" &&
+              user?.role !== "admin" && (
+                <div className="bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200 rounded-xl p-6">
+                  <div className="text-center">
+                    <div className="w-12 h-12 bg-gradient-to-r from-emerald-500 to-green-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <Award className="w-6 h-6 text-white" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-emerald-900 mb-2">
+                      Verified Professional
+                    </h3>
+                    <p className="text-sm text-emerald-700 mb-4">
+                      Your profile is verified and you're ready to connect with
+                      other medical professionals.
+                    </p>
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-emerald-800">
+                          {dashboardData.stats.profileViews}
+                        </div>
+                        <div className="text-xs text-emerald-600">
+                          Profile Views
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-emerald-800">
+                          {user?.rating?.average
+                            ? user.rating.average.toFixed(1)
+                            : "5.0"}
+                        </div>
+                        <div className="text-xs text-emerald-600">Rating</div>
+                      </div>
+                    </div>
+                    {user?.role === "junior" && (
+                      <Link
+                        to="/jobs"
+                        className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors"
+                      >
+                        Find Opportunities <Search className="w-3 h-3 ml-1" />
+                      </Link>
+                    )}
+                    {user?.role === "senior" && (
+                      <Link
+                        to="/jobs/create"
+                        className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors"
+                      >
+                        Post New Job <Plus className="w-3 h-3 ml-1" />
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              )}
           </div>
         </div>
+
+        {/* Additional Role-Specific Sections */}
+        {user?.role === "admin" && (
+          <div className="mt-8">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-slate-900">
+                  System Overview
+                </h2>
+                <Link
+                  to="/admin/reports"
+                  className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center"
+                >
+                  View Reports <ChevronRight className="w-4 h-4 ml-1" />
+                </Link>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-slate-50 rounded-lg p-4">
+                  <h3 className="text-sm font-medium text-slate-600 mb-2">
+                    Pending Actions
+                  </h3>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-700">
+                        Verifications
+                      </span>
+                      <span className="text-sm font-semibold text-red-600">
+                        15
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-700">
+                        Support Tickets
+                      </span>
+                      <span className="text-sm font-semibold text-amber-600">
+                        7
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-700">Disputes</span>
+                      <span className="text-sm font-semibold text-blue-600">
+                        2
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 rounded-lg p-4">
+                  <h3 className="text-sm font-medium text-slate-600 mb-2">
+                    Platform Health
+                  </h3>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-700">Uptime</span>
+                      <span className="text-sm font-semibold text-green-600">
+                        99.9%
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-700">
+                        Response Time
+                      </span>
+                      <span className="text-sm font-semibold text-green-600">
+                        125ms
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-700">Error Rate</span>
+                      <span className="text-sm font-semibold text-green-600">
+                        0.01%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 rounded-lg p-4">
+                  <h3 className="text-sm font-medium text-slate-600 mb-2">
+                    Recent Growth
+                  </h3>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-700">New Users</span>
+                      <span className="text-sm font-semibold text-blue-600">
+                        +23 this week
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-700">
+                        Active Jobs
+                      </span>
+                      <span className="text-sm font-semibold text-blue-600">
+                        +12 this week
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-700">Revenue</span>
+                      <span className="text-sm font-semibold text-green-600">
+                        +18% this month
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
 };
+
 export default Dashboard;
