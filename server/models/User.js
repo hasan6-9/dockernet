@@ -488,8 +488,120 @@ const UserSchema = new mongoose.Schema(
       maxSimultaneousProjects: { type: Number, default: 3, min: 1, max: 10 },
     },
 
+    // Job Preferences
+    job_preferences: {
+      seeking_opportunities: {
+        type: Boolean,
+        default: true,
+      },
+      preferred_categories: [
+        {
+          type: String,
+          enum: [
+            "consultation",
+            "research",
+            "documentation",
+            "review",
+            "telemedicine",
+          ],
+        },
+      ],
+      preferred_budget_range: {
+        min: {
+          type: Number,
+          min: 0,
+        },
+        max: {
+          type: Number,
+          min: 0,
+        },
+      },
+      preferred_timeline: {
+        type: String,
+        enum: ["urgent", "flexible", "long_term"],
+        default: "flexible",
+      },
+      availability_hours_per_week: {
+        type: Number,
+        min: 0,
+        max: 168,
+        default: 20,
+      },
+      remote_work_preference: {
+        type: String,
+        enum: ["remote_only", "onsite_only", "flexible"],
+        default: "remote_only",
+      },
+      notification_preferences: {
+        new_jobs: { type: Boolean, default: true },
+        job_matches: { type: Boolean, default: true },
+        application_updates: { type: Boolean, default: true },
+      },
+    },
+
     // Profile Analytics
     analytics: ProfileAnalyticsSchema,
+
+    // Job Statistics
+    job_statistics: {
+      // For Senior Doctors (Employers)
+      jobs_posted: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      jobs_completed: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      total_spent: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      // For Junior Doctors (Job Seekers)
+      applications_submitted: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      applications_accepted: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      total_earnings: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      // Common Statistics
+      projects_completed: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      success_rate: {
+        type: Number,
+        default: 0,
+        min: 0,
+        max: 100,
+      },
+      average_project_rating: {
+        type: Number,
+        default: 0,
+        min: 0,
+        max: 5,
+      },
+      response_time_hours: {
+        type: Number,
+        default: 24,
+        min: 0,
+      },
+    },
 
     // Profile Completion
     profileCompletion: {
@@ -599,6 +711,12 @@ UserSchema.index({
   "skills.name": "text",
   searchKeywords: "text",
 });
+
+// Indexes for job-related queries
+UserSchema.index({ "job_preferences.preferred_categories": 1 });
+UserSchema.index({ "job_preferences.seeking_opportunities": 1 });
+UserSchema.index({ "job_statistics.success_rate": -1 });
+UserSchema.index({ "job_statistics.average_project_rating": -1 });
 
 // Virtual for full name
 UserSchema.virtual("fullName").get(function () {
@@ -824,6 +942,159 @@ UserSchema.methods.updateRating = function () {
     count: this.reviews.length,
     breakdown,
     categories,
+  };
+};
+
+// Method to update job statistics
+UserSchema.methods.updateJobStatistics = async function () {
+  try {
+    const Job = mongoose.model("Job");
+    const Application = mongoose.model("Application");
+
+    if (this.role === "senior") {
+      // Update employer statistics
+      this.job_statistics.jobs_posted = await Job.countDocuments({
+        posted_by: this._id,
+      });
+
+      this.job_statistics.jobs_completed = await Job.countDocuments({
+        posted_by: this._id,
+        status: "completed",
+      });
+
+      // Calculate total spent (sum of completed job budgets)
+      const completedJobs = await Job.find({
+        posted_by: this._id,
+        status: "completed",
+      }).select("budget.amount");
+
+      this.job_statistics.total_spent = completedJobs.reduce(
+        (sum, job) => sum + (job.budget.amount || 0),
+        0
+      );
+    } else if (this.role === "junior") {
+      // Update job seeker statistics
+      this.job_statistics.applications_submitted =
+        await Application.countDocuments({
+          applicant_id: this._id,
+          status: { $ne: "draft" },
+        });
+
+      this.job_statistics.applications_accepted =
+        await Application.countDocuments({
+          applicant_id: this._id,
+          status: "accepted",
+        });
+
+      // Calculate total earnings from completed applications
+      const completedApplications = await Application.find({
+        applicant_id: this._id,
+        status: "completed",
+      }).select("proposal.proposed_budget");
+
+      this.job_statistics.total_earnings = completedApplications.reduce(
+        (sum, app) => sum + (app.proposal.proposed_budget || 0),
+        0
+      );
+    }
+
+    // Calculate success rate
+    if (
+      this.job_statistics.jobs_posted > 0 ||
+      this.job_statistics.applications_submitted > 0
+    ) {
+      const completed =
+        this.job_statistics.jobs_completed ||
+        this.job_statistics.applications_accepted ||
+        0;
+      const total =
+        this.job_statistics.jobs_posted ||
+        this.job_statistics.applications_submitted ||
+        1;
+      this.job_statistics.success_rate = Math.round((completed / total) * 100);
+    }
+
+    await this.save({ validateBeforeSave: false });
+  } catch (error) {
+    console.error("Error updating job statistics:", error);
+  }
+};
+
+// Method to get job recommendations
+UserSchema.methods.getJobRecommendations = function (limit = 10) {
+  const Job = mongoose.model("Job");
+
+  let query = { status: "active" };
+
+  // Filter by preferred categories
+  if (
+    this.job_preferences.preferred_categories &&
+    this.job_preferences.preferred_categories.length > 0
+  ) {
+    query.category = { $in: this.job_preferences.preferred_categories };
+  }
+
+  // Filter by specialty match
+  if (this.primarySpecialty) {
+    query.$or = [
+      { specialty: { $regex: this.primarySpecialty, $options: "i" } },
+      { subSpecialties: { $regex: this.primarySpecialty, $options: "i" } },
+    ];
+  }
+
+  // Filter by budget range
+  if (this.job_preferences.preferred_budget_range) {
+    const { min, max } = this.job_preferences.preferred_budget_range;
+    if (min || max) {
+      query["budget.amount"] = {};
+      if (min) query["budget.amount"].$gte = min;
+      if (max) query["budget.amount"].$lte = max;
+    }
+  }
+
+  // Filter by remote work preference
+  if (this.job_preferences.remote_work_preference === "remote_only") {
+    query["requirements.location_preference"] = { $in: ["remote", "hybrid"] };
+  }
+
+  return Job.find(query)
+    .sort({ createdAt: -1, featured: -1 })
+    .limit(limit)
+    .populate("posted_by", "firstName lastName profilePhoto rating");
+};
+
+// Method to check job application eligibility
+UserSchema.methods.canApplyToJob = function (job) {
+  const reasons = [];
+
+  // Check role
+  if (this.role !== "junior") {
+    reasons.push("Only junior doctors can apply to jobs");
+  }
+
+  // Check account status
+  if (this.accountStatus !== "active") {
+    reasons.push("Account must be active to apply to jobs");
+  }
+
+  // Check if seeking opportunities
+  if (!this.job_preferences.seeking_opportunities) {
+    reasons.push("User is not currently seeking opportunities");
+  }
+
+  // Check experience requirements
+  if (job.experience_required.minimum_years > this.yearsOfExperience) {
+    reasons.push(
+      `Minimum ${job.experience_required.minimum_years} years of experience required`
+    );
+  }
+
+  // Check if already applied
+  // This would be checked separately in the controller
+
+  return {
+    canApply: reasons.length === 0,
+    reasons: reasons,
   };
 };
 
