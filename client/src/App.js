@@ -20,6 +20,12 @@ import Profile from "./pages/Profile";
 import EnhancedProfile from "./pages/EnhancedProfile";
 import DoctorSearch from "./pages/DoctorSearch";
 import AdminDashboard from "./pages/AdminDashboard";
+import JobPosting from "./pages/JobPosting";
+import JobManagement from "./pages/JobManagement";
+import JobBrowse from "./pages/JobBrowse";
+import JobDetails from "./pages/JobDetails";
+import ApplicationSubmission from "./pages/ApplicationSubmission";
+import ApplicationTracking from "./pages/ApplicationTracking";
 
 // ErrorBoundary component
 class ErrorBoundary extends React.Component {
@@ -335,52 +341,55 @@ const AppContent = () => {
           }
         />
 
-        {/* Verified Required - For jobs and messages */}
+        {/* Job Management Routes (Senior Doctors) */}
         <Route
-          path="/jobs"
+          path="/jobs/post"
           element={
-            <ProtectedRoute requireVerifiedAccount={true}>
-              <JobsPlaceholder />
+            <ProtectedRoute roles={["senior"]}>
+              <JobPosting />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/jobs/manage"
+          element={
+            <ProtectedRoute roles={["senior"]}>
+              <JobManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/jobs/:jobId/edit"
+          element={
+            <ProtectedRoute roles={["senior"]}>
+              <JobPosting />
             </ProtectedRoute>
           }
         />
 
+        {/* Job Discovery Routes */}
+        <Route path="/jobs" element={<JobBrowse />} />
+        <Route path="/jobs/:jobId" element={<JobDetails />} />
+
+        {/* Application Routes */}
         <Route
-          path="/jobs/create"
+          path="/jobs/:jobId/apply"
           element={
-            <ProtectedRoute requireVerifiedAccount={true}>
-              <JobsPlaceholder />
+            <ProtectedRoute requireActive={true}>
+              <ApplicationSubmission />
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/applications"
           element={
-            <ProtectedRoute requireVerifiedAccount={true}>
-              <JobsPlaceholder />
+            <ProtectedRoute requireActive={true}>
+              <ApplicationTracking />
             </ProtectedRoute>
           }
         />
 
-        <Route
-          path="/applications/review"
-          element={
-            <ProtectedRoute requireVerifiedAccount={true}>
-              <JobsPlaceholder />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/assessments"
-          element={
-            <ProtectedRoute requireVerifiedAccount={true}>
-              <JobsPlaceholder />
-            </ProtectedRoute>
-          }
-        />
-
+        {/* Messages - Verified Required */}
         <Route
           path="/messages"
           element={
@@ -399,7 +408,6 @@ const AppContent = () => {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/admin/users"
           element={
@@ -408,7 +416,6 @@ const AppContent = () => {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/admin/analytics"
           element={
@@ -417,7 +424,6 @@ const AppContent = () => {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/admin/support"
           element={

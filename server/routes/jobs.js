@@ -49,6 +49,21 @@ const {
 const router = express.Router();
 
 // ======================
+// PRIVATE ROUTES - JOB MANAGEMENT (SENIOR DOCTORS)
+// ======================
+
+// Create new job posting (MUST BE BEFORE /:id routes)
+router.post(
+  "/create",
+  protect,
+  requireActive,
+  canPostJobs,
+  checkJobPostingLimit,
+  validateJobCreation,
+  createJob
+);
+
+// ======================
 // PUBLIC ROUTES
 // ======================
 
@@ -67,41 +82,25 @@ router.get("/trending", getTrendingJobs);
 // Get platform job statistics (public access)
 router.get("/statistics", validateStatsQuery, getJobStatistics);
 
-// Get specific job details (public but with visibility checks)
-router.get("/:id", validateJobId, canViewJob, getJob);
+// Get personalized job recommendations (junior doctors only)
+router.get("/recommendations", protect, canApplyToJobs, getRecommendations);
 
 // Track job view for analytics (public access)
 router.post("/:id/view", validateJobId, trackJobView);
 
 // ======================
-// PRIVATE ROUTES - GENERAL
+// PRIVATE ROUTES - JOB MANAGEMENT (SENIOR DOCTORS) - CONTINUED
 // ======================
-
-// Get personalized job recommendations (junior doctors only)
-router.get(
-  "/recommendations/personalized",
-  protect,
-  canApplyToJobs,
-  getRecommendations
-);
-
-// ======================
-// PRIVATE ROUTES - JOB MANAGEMENT (SENIOR DOCTORS)
-// ======================
-
-// Create new job posting
-router.post(
-  "/create",
-  protect,
-  requireActive,
-  canPostJobs,
-  checkJobPostingLimit,
-  validateJobCreation,
-  createJob
-);
 
 // Get employer's job postings with filtering and pagination
-router.get("/my-jobs/dashboard", protect, canPostJobs, getMyJobs);
+router.get("/my-jobs", protect, canPostJobs, getMyJobs);
+
+// ======================
+// ROUTES WITH :id PARAMETER (MUST COME AFTER SPECIFIC ROUTES)
+// ======================
+
+// Get specific job details (public but with visibility checks)
+router.get("/:id", validateJobId, canViewJob, getJob);
 
 // Update job posting
 router.put(
@@ -224,7 +223,7 @@ router.delete(
 
 // Bulk job operations (premium/verified users)
 router.post(
-  "/bulk/update-status",
+  "/bulk/status",
   protect,
   requireActive,
   canPostJobs,
@@ -293,7 +292,7 @@ router.post(
 
 // Get all jobs for admin management
 router.get(
-  "/admin/all-jobs",
+  "/admin/all",
   protect,
   require("../middleware/auth").requireAdmin,
   async (req, res) => {

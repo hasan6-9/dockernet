@@ -155,8 +155,16 @@ const Dashboard = () => {
         title: "Post New Job",
         description: "Create opportunities for junior doctors",
         icon: Plus,
-        link: "/jobs/create",
+        link: "/jobs/post",
         color: "bg-gradient-to-r from-blue-500 to-blue-600",
+        urgent: false,
+      },
+      {
+        title: "Manage Jobs",
+        description: "View and manage your job postings",
+        icon: Briefcase,
+        link: "/jobs/manage",
+        color: "bg-gradient-to-r from-green-500 to-green-600",
         urgent: false,
       },
       {
@@ -221,21 +229,21 @@ const Dashboard = () => {
     const quickActions = [
       {
         title: "Browse Jobs",
-        description: "47 new opportunities available",
+        description: "Find new opportunities",
         icon: Search,
         link: "/jobs",
         color: "bg-gradient-to-r from-blue-500 to-blue-600",
         urgent: false,
-        badge: "47",
+        badge: "47", // Number of new jobs
       },
       {
         title: "My Applications",
-        description: "5 applications awaiting response",
+        description: "Track your job applications",
         icon: FileText,
         link: "/applications",
-        color: "bg-gradient-to-r from-amber-500 to-amber-600",
+        color: "bg-gradient-to-r from-purple-500 to-purple-600",
         urgent: true,
-        badge: "5",
+        badge: "5", // Number of pending applications
       },
       {
         title: "Complete Profile",

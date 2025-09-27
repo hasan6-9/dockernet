@@ -200,7 +200,7 @@ app.use("/api/jobs", jobRoutes);
 app.use("/api/applications", applicationRoutes);
 
 // 404 handler for API routes
-app.use("/api/*", (req, res) => {
+app.all(/^\/api\/.*$/, (req, res) => {
   res.status(404).json({
     success: false,
     message: `API endpoint ${req.originalUrl} not found`,

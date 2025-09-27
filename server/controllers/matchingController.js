@@ -633,11 +633,3 @@ function levenshteinDistance(str1, str2) {
 
   return matrix[str2.length][str1.length];
 }
-
-module.exports = {
-  calculateJobMatch,
-  getJobRecommendations,
-  getCandidateRecommendations,
-  getMatchAnalytics,
-  bulkCalculateMatches,
-};
