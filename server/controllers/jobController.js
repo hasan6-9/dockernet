@@ -407,7 +407,8 @@ exports.searchJobs = async (req, res) => {
       sortBy = "relevance",
     } = req.query;
 
-    if (!searchTerm || searchTerm.trim().length < 2) {
+    // ✅ FIX: Check if searchTerm exists before calling trim()
+    if (searchTerm && searchTerm.trim().length < 2) {
       return res.status(400).json({
         success: false,
         message: "Search term must be at least 2 characters long",
@@ -430,7 +431,10 @@ exports.searchJobs = async (req, res) => {
       (key) => filters[key] === undefined && delete filters[key]
     );
 
-    const query = Job.searchJobs(searchTerm.trim(), filters);
+    // ✅ FIX: Use searchTerm only if it exists and has content
+    const trimmedSearchTerm =
+      searchTerm && searchTerm.trim() !== "" ? searchTerm.trim() : null;
+    const query = Job.searchJobs(trimmedSearchTerm, filters);
 
     // Execute query with pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -443,8 +447,8 @@ exports.searchJobs = async (req, res) => {
       )
       .lean();
 
-    // Get total count for pagination
-    const totalQuery = Job.searchJobs(searchTerm.trim(), filters);
+    // ✅ FIX: Use the same trimmedSearchTerm for count query
+    const totalQuery = Job.searchJobs(trimmedSearchTerm, filters);
     const total = await totalQuery.countDocuments();
 
     res.status(200).json({
@@ -456,7 +460,7 @@ exports.searchJobs = async (req, res) => {
         total,
         pages: Math.ceil(total / parseInt(limit)),
       },
-      searchTerm,
+      searchTerm: trimmedSearchTerm,
       filters,
     });
   } catch (error) {

@@ -1,336 +1,249 @@
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import LoadingSpinner from "./common/LoadingSpinner";
+
+const AccessDenied = ({ reason, requiredLevel, currentStatus }) => (
+  <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-8">
+      <div className="text-center">
+        <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+          <svg
+            className="h-6 w-6 text-[#EF4444]"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+            />
+          </svg>
+        </div>
+
+        <h3 className="mt-4 text-lg font-medium text-gray-900">
+          Access Denied
+        </h3>
+
+        <p className="mt-2 text-sm text-gray-600">
+          {reason || "You don't have permission to access this page."}
+        </p>
+
+        {requiredLevel && (
+          <div className="mt-4 p-3 bg-blue-50 rounded-md">
+            <p className="text-sm text-[#1E40AF]">
+              <span className="font-medium">Required:</span> {requiredLevel}
+            </p>
+            {currentStatus && (
+              <p className="text-sm text-[#1E40AF] mt-1">
+                <span className="font-medium">Current:</span> {currentStatus}
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="mt-6 space-y-3">
+          <a
+            href="/dashboard"
+            className="block w-full px-4 py-2 bg-[#3B82F6] text-white rounded-md hover:bg-blue-600 transition-colors font-medium"
+          >
+            Go to Dashboard
+          </a>
+          <a
+            href="/profile"
+            className="block w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors font-medium"
+          >
+            Complete Your Profile
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+);
 
 const ProtectedRoute = ({
   children,
-  // Protection levels
-  requireActive = false,
+  allowedRoles = null,
+  requiredPermission = null,
   requireVerified = false,
-  requireVerifiedAccount = false,
-  requireSubscription = false,
-  requireAdmin = false,
-  // Legacy role-based support
-  roles = [],
-  // Custom redirect paths
-  redirectTo = null,
+  requireActive = false,
+  redirectTo = "/login",
 }) => {
-  const { isAuthenticated, user, loading } = useAuth();
   const location = useLocation();
+  const auth = useAuth();
 
   // Show loading spinner while checking authentication
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    );
+  if (auth.loading) {
+    return <LoadingSpinner message="Checking credentials..." />;
   }
 
-  // Level 1: Basic Authentication Check
-  if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+  // Check 1: Must be authenticated
+  if (!auth.isAuthenticated) {
+    return <Navigate to={redirectTo} state={{ from: location }} replace />;
   }
 
-  // Level 2: Account Status Check (pending vs active vs suspended)
-  const isAccountAccessible = ["active", "pending"].includes(
-    user?.accountStatus
-  );
-
-  if (!isAccountAccessible) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6">
-          <div className="text-center">
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-              <svg
-                className="h-6 w-6 text-red-600"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
-                />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Account Suspended
-            </h2>
-            <p className="text-gray-600 mb-6">
-              Your account has been{" "}
-              {user?.accountStatus === "inactive" ? "deactivated" : "suspended"}
-              . Please contact support for assistance.
-            </p>
-            <button
-              onClick={() =>
-                (window.location.href = "mailto:support@yourapp.com")
-              }
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-            >
-              Contact Support
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Level 3: Active Account Requirement (excludes pending users)
-  if (requireActive && user?.accountStatus !== "active") {
-    const isPending = user?.accountStatus === "pending";
-
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6">
-          <div className="text-center">
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 mb-4">
-              <svg
-                className="h-6 w-6 text-yellow-600"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Account Verification Required
-            </h2>
-            <p className="text-gray-600 mb-6">
-              {isPending
-                ? "Your account is pending verification. Complete your profile to unlock this feature."
-                : "An active account status is required for this operation."}
-            </p>
-            {isPending ? (
-              <Navigate to="/profile/complete" replace />
-            ) : (
-              <div className="space-y-3">
-                <p className="text-sm text-gray-500">
-                  Please contact support if you believe this is an error.
-                </p>
-                <Navigate to="/dashboard" replace />
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Level 4: Email Verification Check
-  if (requireVerified && !user?.isVerified) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6">
-          <div className="text-center">
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 mb-4">
-              <svg
-                className="h-6 w-6 text-blue-600"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Email Verification Required
-            </h2>
-            <p className="text-gray-600 mb-6">
-              Please verify your email address to access this feature.
-            </p>
-            <div className="space-y-3">
-              <button
-                onClick={() => {
-                  /* Trigger resend verification email */
-                }}
-                className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-              >
-                Resend Verification Email
-              </button>
-              <Navigate to="/dashboard" replace />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Level 5: Professional Account Verification
-  if (requireVerifiedAccount) {
-    const hasVerificationStatus = user?.verificationStatus?.overall;
-    const isVerified = hasVerificationStatus === "verified";
-
-    if (!isVerified) {
+  // Check 2: Role-based access control
+  if (allowedRoles && allowedRoles.length > 0) {
+    if (!allowedRoles.includes(auth.role)) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6">
-            <div className="text-center">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-purple-100 mb-4">
-                <svg
-                  className="h-6 w-6 text-purple-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
-                  />
-                </svg>
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                Professional Verification Required
-              </h2>
-              <p className="text-gray-600 mb-6">
-                This feature requires professional account verification to
-                ensure quality and trust.
-              </p>
-              <div className="space-y-3">
-                <button
-                  onClick={() =>
-                    (window.location.href = "/verification/professional")
-                  }
-                  className="w-full bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700"
-                >
-                  Start Verification Process
-                </button>
-                <p className="text-sm text-gray-500">
-                  Verification includes identity confirmation and credential
-                  review.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AccessDenied
+          reason={`This page is only accessible to ${allowedRoles.join(
+            " or "
+          )} users.`}
+          requiredLevel={allowedRoles.join(", ")}
+          currentStatus={auth.role}
+        />
       );
     }
   }
 
-  // Level 6: Subscription Check
-  if (requireSubscription && user?.subscriptionStatus !== "active") {
+  // Check 3: Account status requirements
+  if (requireActive && !auth.isAccountActive()) {
+    let reason = "An active account is required to access this page.";
+    if (auth.isAccountPending()) {
+      reason =
+        "Please complete your profile verification to access this feature.";
+    } else if (auth.isAccountSuspended()) {
+      reason = "Your account has been suspended. Please contact support.";
+    } else if (auth.isAccountInactive()) {
+      reason =
+        "Your account is inactive. Please contact support to reactivate.";
+    }
+
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6">
-          <div className="text-center">
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
-              <svg
-                className="h-6 w-6 text-green-600"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
-                />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Premium Subscription Required
-            </h2>
-            <p className="text-gray-600 mb-6">
-              This is a premium feature that requires an active subscription.
-            </p>
-            <div className="space-y-3">
-              <button
-                onClick={() => (window.location.href = "/subscription")}
-                className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
-              >
-                Upgrade to Premium
-              </button>
-              <Navigate to={redirectTo || "/dashboard"} replace />
-            </div>
-          </div>
-        </div>
-      </div>
+      <AccessDenied
+        reason={reason}
+        requiredLevel="Active Account"
+        currentStatus={auth.accountStatus}
+      />
     );
   }
 
-  // Level 7: Admin Role Check
-  if (requireAdmin && user?.role !== "admin") {
+  // Check 4: Verification requirements
+  if (requireVerified && !auth.isFullyVerified()) {
+    const missingVerifications = [];
+    if (!auth.isIdentityVerified())
+      missingVerifications.push("Identity Verification");
+    if (!auth.isMedicalLicenseVerified())
+      missingVerifications.push("Medical License");
+    if (!auth.isBackgroundCheckVerified())
+      missingVerifications.push("Background Check");
+
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6">
-          <div className="text-center">
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-              <svg
-                className="h-6 w-6 text-red-600"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728"
-                />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Administrator Access Required
-            </h2>
-            <p className="text-gray-600 mb-6">
-              This area is restricted to system administrators only.
-            </p>
-            <Navigate to="/dashboard" replace />
-          </div>
-        </div>
-      </div>
+      <AccessDenied
+        reason={`This feature requires a verified account. Missing: ${missingVerifications.join(
+          ", "
+        )}`}
+        requiredLevel="Fully Verified Account"
+        currentStatus={auth.verificationStatus.overall}
+      />
     );
   }
 
-  // Legacy: Role-based access (for backward compatibility)
-  if (roles.length > 0 && !roles.includes(user?.role)) {
+  // Check 5: Permission-based access control
+  if (requiredPermission && !auth.canAccessRoute(requiredPermission)) {
+    let reason = `This feature requires ${requiredPermission} level access.`;
+    let suggestions = [];
+
+    switch (requiredPermission) {
+      case "active":
+        reason = "Your account must be active to access this feature.";
+        suggestions = [
+          "Complete your profile",
+          "Upload verification documents",
+        ];
+        break;
+      case "professional":
+        reason =
+          "This is a professional feature requiring account verification.";
+        suggestions = [
+          "Upload your medical license",
+          "Complete identity verification",
+        ];
+        break;
+      case "premium":
+        reason = "This is a premium feature requiring an active subscription.";
+        suggestions = ["Upgrade to Professional plan", "Contact sales"];
+        break;
+      case "admin":
+        reason = "This feature is only accessible to administrators.";
+        break;
+      default:
+        break;
+    }
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6">
+        <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-8">
           <div className="text-center">
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-orange-100 mb-4">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-amber-100">
               <svg
-                className="h-6 w-6 text-orange-600"
+                className="h-6 w-6 text-amber-600"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
+                aria-hidden="true"
               >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  strokeWidth="2"
+                  strokeWidth={2}
                   d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                 />
               </svg>
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Access Denied
-            </h2>
-            <p className="text-gray-600 mb-6">
-              Your current role ({user?.role}) doesn't have permission to access
-              this page.
-            </p>
-            <p className="text-sm text-gray-500 mb-4">
-              Required role{roles.length > 1 ? "s" : ""}: {roles.join(", ")}
-            </p>
-            <Navigate to="/dashboard" replace />
+
+            <h3 className="mt-4 text-lg font-medium text-gray-900">
+              Upgrade Required
+            </h3>
+
+            <p className="mt-2 text-sm text-gray-600">{reason}</p>
+
+            {suggestions.length > 0 && (
+              <div className="mt-4 text-left">
+                <p className="text-sm font-medium text-gray-700 mb-2">
+                  To gain access:
+                </p>
+                <ul className="space-y-1">
+                  {suggestions.map((suggestion, index) => (
+                    <li
+                      key={index}
+                      className="text-sm text-gray-600 flex items-start"
+                    >
+                      <span className="text-[#3B82F6] mr-2">•</span>
+                      {suggestion}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="mt-6 space-y-3">
+              {requiredPermission === "premium" ? (
+                <a
+                  href="/pricing"
+                  className="block w-full px-4 py-2 bg-[#3B82F6] text-white rounded-md hover:bg-blue-600 transition-colors font-medium"
+                >
+                  View Pricing Plans
+                </a>
+              ) : (
+                <a
+                  href="/profile"
+                  className="block w-full px-4 py-2 bg-[#3B82F6] text-white rounded-md hover:bg-blue-600 transition-colors font-medium"
+                >
+                  Complete Profile
+                </a>
+              )}
+              <a
+                href="/dashboard"
+                className="block w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors font-medium"
+              >
+                Go to Dashboard
+              </a>
+            </div>
           </div>
         </div>
       </div>
@@ -338,7 +251,35 @@ const ProtectedRoute = ({
   }
 
   // All checks passed - render the protected content
-  return children;
+  return <>{children}</>;
+};
+
+export const withProtection = (Component, protectionConfig = {}) => {
+  return (props) => (
+    <ProtectedRoute {...protectionConfig}>
+      <Component {...props} />
+    </ProtectedRoute>
+  );
+};
+
+export const RequirePermission = ({
+  permission,
+  children,
+  fallback = null,
+}) => {
+  const auth = useAuth();
+  if (!auth.canAccessRoute(permission)) {
+    return fallback;
+  }
+  return <>{children}</>;
+};
+
+export const RequireRole = ({ roles, children, fallback = null }) => {
+  const auth = useAuth();
+  if (!roles.includes(auth.role)) {
+    return fallback;
+  }
+  return <>{children}</>;
 };
 
 export default ProtectedRoute;

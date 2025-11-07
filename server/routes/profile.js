@@ -2,7 +2,6 @@
 const express = require("express");
 const { body, query, param } = require("express-validator");
 
-// ✅ UPDATED: Import the new middleware functions
 const {
   protect,
   authorize,
@@ -33,7 +32,7 @@ const {
 
 const router = express.Router();
 
-// Validation middleware - keeping your existing validation exactly as-is
+// Validation middleware (keeping your existing validation)
 const validateBasicProfile = [
   body("firstName")
     .optional()
@@ -355,7 +354,6 @@ const validatePrivacy = [
 // PUBLIC ROUTES - No authentication required
 // =============================================================================
 router.get("/search", validateSearch, searchProfiles);
-router.get("/:identifier", getPublicProfile);
 
 // =============================================================================
 // BASIC PROTECTED ROUTES - Accessible to pending + active users
@@ -467,5 +465,7 @@ router.get("/test-auth", (req, res) => {
     },
   });
 });
+
+router.get("/:identifier", getPublicProfile);
 
 module.exports = router;

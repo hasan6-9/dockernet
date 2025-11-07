@@ -364,8 +364,8 @@ exports.updateApplicationStatus = async (req, res) => {
   }
 };
 
-// @desc    Withdraw application
-// @route   DELETE /api/applications/:id
+// @desc    Withdraw application (supports both DELETE and PUT)
+// @route   DELETE /api/applications/:id OR PUT /api/applications/:id/withdraw
 // @access  Private (Applicant only)
 exports.withdrawApplication = async (req, res) => {
   try {
@@ -387,15 +387,24 @@ exports.withdrawApplication = async (req, res) => {
     }
 
     // Check if application can be withdrawn
-    if (["accepted", "completed"].includes(application.status)) {
+    if (["accepted", "completed", "withdrawn"].includes(application.status)) {
       return res.status(400).json({
         success: false,
-        message: "Cannot withdraw accepted or completed applications",
+        message: `Cannot withdraw application in ${application.status} status`,
       });
     }
 
     // Update status to withdrawn
     application.status = "withdrawn";
+    application.withdrawn_at = new Date();
+
+    // Add to communication log
+    await application.addCommunication(
+      "status_change",
+      "Application withdrawn by applicant",
+      "applicant"
+    );
+
     await application.save();
 
     // Update job application count
@@ -407,6 +416,7 @@ exports.withdrawApplication = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Application withdrawn successfully",
+      data: application,
     });
   } catch (error) {
     console.error("Error withdrawing application:", error);
@@ -476,9 +486,13 @@ exports.addMessage = async (req, res) => {
 // @access  Private (Job owner only)
 exports.scheduleInterview = async (req, res) => {
   try {
-    const { scheduled_date, meeting_link, notes } = req.body;
+    const { date, time, platform, notes, scheduled_date, meeting_link } =
+      req.body;
 
-    if (!scheduled_date) {
+    // ✅ FIX: Support multiple date field names for compatibility
+    const interviewDate = scheduled_date || date;
+
+    if (!interviewDate) {
       return res.status(400).json({
         success: false,
         message: "Interview date is required",
@@ -505,8 +519,15 @@ exports.scheduleInterview = async (req, res) => {
       });
     }
 
+    // ✅ FIX: Combine date and time if provided separately
+    let finalDate = new Date(interviewDate);
+    if (time && interviewDate) {
+      const [hours, minutes] = time.split(":");
+      finalDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    }
+
     // Validate interview date is in the future
-    if (new Date(scheduled_date) <= new Date()) {
+    if (finalDate <= new Date()) {
       return res.status(400).json({
         success: false,
         message: "Interview date must be in the future",
@@ -515,8 +536,8 @@ exports.scheduleInterview = async (req, res) => {
 
     // Update application
     application.interview_details = {
-      scheduled_date: new Date(scheduled_date),
-      meeting_link: meeting_link || "",
+      scheduled_date: finalDate,
+      meeting_link: meeting_link || platform || "", // ✅ FIX: Support both field names
       notes: notes || "",
       completed: false,
     };
@@ -527,7 +548,7 @@ exports.scheduleInterview = async (req, res) => {
     // Add communication log entry
     await application.addCommunication(
       "interview",
-      `Interview scheduled for ${new Date(scheduled_date).toLocaleString()}`,
+      `Interview scheduled for ${finalDate.toLocaleString()}`,
       "employer"
     );
 
@@ -553,7 +574,8 @@ exports.scheduleInterview = async (req, res) => {
 // @access  Private (Job owner only)
 exports.acceptApplication = async (req, res) => {
   try {
-    const { contract_details } = req.body;
+    // ✅ FIX: Make contract_details optional with default value
+    const { contract_details = {} } = req.body;
 
     const application = await Application.findById(req.params.id)
       .populate("job_id", "posted_by title")
@@ -574,15 +596,27 @@ exports.acceptApplication = async (req, res) => {
       });
     }
 
+    // Check if application can be accepted
+    const validStatuses = [
+      "under_review",
+      "shortlisted",
+      "interview_scheduled",
+      "interview_completed",
+    ];
+    if (!validStatuses.includes(application.status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot accept application in ${application.status} status`,
+      });
+    }
+
     // Update application
     application.status = "accepted";
-    if (contract_details) {
-      application.contract_details = {
-        ...application.contract_details,
-        ...contract_details,
-        signed_date: new Date(),
-      };
-    }
+    application.contract_details = {
+      ...application.contract_details,
+      ...contract_details,
+      accepted_date: new Date(),
+    };
 
     await application.save();
 
@@ -646,7 +680,8 @@ exports.acceptApplication = async (req, res) => {
 // @access  Private (Job owner only)
 exports.rejectApplication = async (req, res) => {
   try {
-    const { rejection_reason } = req.body;
+    // ✅ FIX: Make rejection_reason optional
+    const { rejection_reason } = req.body || {};
 
     const application = await Application.findById(req.params.id).populate(
       "job_id",
@@ -668,6 +703,21 @@ exports.rejectApplication = async (req, res) => {
       });
     }
 
+    // Check if application can be rejected
+    const validStatuses = [
+      "submitted",
+      "under_review",
+      "shortlisted",
+      "interview_scheduled",
+      "interview_completed",
+    ];
+    if (!validStatuses.includes(application.status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot reject application in ${application.status} status`,
+      });
+    }
+
     // Update application
     application.status = "rejected";
     if (rejection_reason) {
@@ -685,7 +735,8 @@ exports.rejectApplication = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Application rejected",
+      message: "Application rejected successfully",
+      data: application,
     });
   } catch (error) {
     console.error("Error rejecting application:", error);
@@ -777,10 +828,11 @@ exports.rateApplication = async (req, res) => {
       });
     }
 
-    if (application.status !== "completed") {
+    // ✅ FIX: Allow rating for accepted applications too (not just completed)
+    if (!["accepted", "completed"].includes(application.status)) {
       return res.status(400).json({
         success: false,
-        message: "Can only rate completed projects",
+        message: "Can only rate accepted or completed projects",
       });
     }
 
@@ -800,28 +852,15 @@ exports.rateApplication = async (req, res) => {
       if (application.feedback.employer_rating) {
         return res.status(400).json({
           success: false,
-          message: "You have already rated this project",
+          message: "You have already rated this applicant",
         });
       }
       application.feedback.employer_rating = rating;
       application.feedback.employer_review = review || "";
-    } else {
-      if (application.feedback.applicant_rating) {
-        return res.status(400).json({
-          success: false,
-          message: "You have already rated this project",
-        });
-      }
-      application.feedback.applicant_rating = rating;
-      application.feedback.applicant_review = review || "";
-    }
 
-    await application.save();
-
-    // Update user rating if this is rating the other party
-    if (isEmployer) {
-      // Employer rating applicant - update applicant's rating
+      // Update applicant's rating
       const applicant = application.applicant_id;
+      applicant.reviews = applicant.reviews || [];
       applicant.reviews.push({
         reviewer: req.user.id,
         project: application._id,
@@ -836,9 +875,24 @@ exports.rateApplication = async (req, res) => {
         },
         verified: true,
       });
-      applicant.updateRating();
+
+      // Update applicant's overall rating
+      if (applicant.updateRating) {
+        applicant.updateRating();
+      }
       await applicant.save();
+    } else {
+      if (application.feedback.applicant_rating) {
+        return res.status(400).json({
+          success: false,
+          message: "You have already rated this employer",
+        });
+      }
+      application.feedback.applicant_rating = rating;
+      application.feedback.applicant_review = review || "";
     }
+
+    await application.save();
 
     res.status(200).json({
       success: true,

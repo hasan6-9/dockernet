@@ -542,6 +542,48 @@ router.put(
 );
 
 // ======================
+// ADDITIONAL ROUTES FOR TEST COMPATIBILITY
+// ======================
+
+// ✅ FIX: Support both PUT and DELETE for withdraw
+router.put(
+  "/:id/withdraw",
+  protect,
+  requireActive,
+  canManageApplication,
+  withdrawApplication
+);
+
+// ✅ FIX: Support both PUT and POST for accept
+router.put(
+  "/:id/accept",
+  protect,
+  requireActive,
+  canManageApplication,
+  validateContractDetails,
+  acceptApplication
+);
+
+// ✅ FIX: Support both PUT and POST for reject
+router.put(
+  "/:id/reject",
+  protect,
+  requireActive,
+  canManageApplication,
+  rejectApplication
+);
+
+// ✅ FIX: Add rate application with PUT method
+router.put(
+  "/:id/rate",
+  protect,
+  requireActive,
+  canManageApplication,
+  validateRating,
+  rateApplication
+);
+
+// ======================
 // ERROR HANDLING MIDDLEWARE
 // ======================
 

@@ -1,4 +1,4 @@
-// server/server.js - Updated with Job System Routes
+// server/server.js - Updated with Job System Routes and Auto-Admin Creation
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -77,9 +77,59 @@ mongoose
     socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
     family: 4, // Use IPv4, skip trying IPv6
   })
-  .then(() => {
+  .then(async () => {
     console.log("MongoDB connected successfully");
     console.log(`Database: ${mongoose.connection.name}`);
+
+    // ============================================
+    // AUTO-CREATE ADMIN USER IF NOT EXISTS
+    // ============================================
+    try {
+      const User = require("./models/User");
+
+      // Check if admin user already exists
+      const existingAdmin = await User.findOne({ role: "admin" });
+
+      if (!existingAdmin) {
+        console.log("\n🔍 No admin user found. Creating default admin...");
+
+        // Create default admin user
+        const adminUser = await User.create({
+          firstName: "System",
+          lastName: "Admin",
+          email: "admin@doconnect.com",
+          phone: "+1-000-000-0000", // Required field
+          password: "Admin@123", // Will be hashed automatically by pre-save hook
+          role: "admin",
+          accountStatus: "active",
+          medicalLicenseNumber: "ADMIN-000000", // Required field
+          licenseState: "System", // Required field
+          primarySpecialty: "Administration", // Required field
+          yearsOfExperience: 0, // Required field
+          medicalSchool: {
+            name: "System Administration",
+            graduationYear: new Date().getFullYear(),
+          },
+          verificationStatus: {
+            identity: "verified",
+            medical_license: "verified",
+            background_check: "verified",
+            overall: "verified",
+          },
+        });
+
+        console.log("✅ Default admin user created successfully!");
+        console.log("📧 Email: admin@doconnect.com");
+        console.log("🔑 Password: Admin@123");
+        console.log("⚠️  IMPORTANT: Change this password after first login!\n");
+      } else {
+        console.log("✅ Admin user already exists.");
+      }
+    } catch (error) {
+      console.error("❌ Error creating admin user:", error.message);
+      // Don't exit - let the app continue even if admin creation fails
+    }
+    // ============================================
   })
   .catch((err) => {
     console.log("MongoDB connection error:", err);
@@ -382,6 +432,19 @@ const server = app.listen(PORT, () => {
   console.log(`🚀 API Documentation: http://localhost:${PORT}/api/status`);
   console.log(`💊 Health Check: http://localhost:${PORT}/api/health`);
   console.log("=================================");
+
+  // ✅ Add THIS block here, after server start
+  if (app._router && app._router.stack) {
+    console.log("📋 Registered API Routes:");
+    app._router.stack.forEach((r) => {
+      if (r.route && r.route.path) {
+        console.log(
+          `   ${Object.keys(r.route.methods)[0].toUpperCase()} ${r.route.path}`
+        );
+      }
+    });
+    console.log("=================================");
+  }
 });
 
 // Set server timeout

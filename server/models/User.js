@@ -606,22 +606,9 @@ const UserSchema = new mongoose.Schema(
     // Profile Completion
     profileCompletion: {
       percentage: { type: Number, default: 0, min: 0, max: 100 },
-      completedSections: [
-        {
-          type: String,
-          enum: [
-            "basic_info",
-            "medical_info",
-            "profile_photo",
-            "bio",
-            "experience",
-            "skills",
-            "certifications",
-            "documents",
-            "availability",
-          ],
-        },
-      ],
+      completedSteps: { type: Number, default: 0 },
+      totalSteps: { type: Number, default: 8 },
+      missingSections: [{ type: String }],
       lastUpdated: { type: Date, default: Date.now },
     },
 
@@ -812,10 +799,18 @@ UserSchema.pre("save", async function (next) {
 
 // Pre-save middleware to update profile completion
 UserSchema.pre("save", function (next) {
-  const newPercentage = this.calculatedProfileCompletion;
-  if (this.profileCompletion.percentage !== newPercentage) {
-    this.profileCompletion.percentage = newPercentage;
-    this.profileCompletion.lastUpdated = new Date();
+  try {
+    if (typeof this.calculateProfileCompletion === "function") {
+      const pc = this.calculateProfileCompletion();
+      this.profileCompletion.percentage = pc.percentage;
+      this.profileCompletion.completedSteps = pc.completedSteps;
+      this.profileCompletion.totalSteps = pc.totalSteps;
+      this.profileCompletion.missingSections = pc.missingSections;
+      this.profileCompletion.lastUpdated = new Date();
+    }
+  } catch (err) {
+    // don't block save on profile completion failure
+    console.error("Error updating profileCompletion pre-save:", err);
   }
   next();
 });
@@ -1077,20 +1072,35 @@ UserSchema.methods.canApplyToJob = function (job) {
     reasons.push("Account must be active to apply to jobs");
   }
 
-  // Check if seeking opportunities
-  if (!this.job_preferences.seeking_opportunities) {
+  // ✅ FIX: Safe check for job_preferences
+  if (this.job_preferences && !this.job_preferences.seeking_opportunities) {
     reasons.push("User is not currently seeking opportunities");
   }
 
   // Check experience requirements
-  if (job.experience_required.minimum_years > this.yearsOfExperience) {
+  if (
+    job.experience_required &&
+    job.experience_required.minimum_years > this.yearsOfExperience
+  ) {
     reasons.push(
       `Minimum ${job.experience_required.minimum_years} years of experience required`
     );
   }
 
-  // Check if already applied
-  // This would be checked separately in the controller
+  // ✅ ADD: Check specialty match (optional but recommended)
+  if (job.specialty) {
+    const specialtyMatch =
+      this.primarySpecialty?.toLowerCase() === job.specialty.toLowerCase() ||
+      (this.subspecialties &&
+        this.subspecialties.some(
+          (sub) => sub.toLowerCase() === job.specialty.toLowerCase()
+        ));
+
+    if (!specialtyMatch) {
+      // This is a soft warning, not a hard requirement
+      // reasons.push(`Specialty mismatch: ${job.specialty} required`);
+    }
+  }
 
   return {
     canApply: reasons.length === 0,
@@ -1153,6 +1163,72 @@ UserSchema.statics.searchDoctors = function (searchTerm, filters = {}) {
   }
 
   return this.find(query).sort(sortOptions);
+};
+
+// Calculate canonical profile completion
+UserSchema.methods.calculateProfileCompletion = function () {
+  const totalSteps = 8;
+  let completedSteps = 1; // Basic info is considered present by default
+
+  // Profile Photo
+  if (this.profilePhoto && this.profilePhoto.url) completedSteps++;
+
+  // Professional Bio (meaningful length)
+  if (this.bio && this.bio.trim().length > 50) completedSteps++;
+
+  // Work Experience
+  if (this.experiences && this.experiences.length > 0) completedSteps++;
+
+  // Skills (at least 3)
+  if (this.skills && this.skills.length >= 3) completedSteps++;
+
+  // Certifications
+  if (this.certifications && this.certifications.length > 0) completedSteps++;
+
+  // Documents
+  if (this.documents && this.documents.length > 0) completedSteps++;
+
+  // Availability settings
+  if (
+    (this.availability && this.availability.weeklySchedule) ||
+    (this.availability && this.availability.hoursPerWeek) ||
+    (this.availability && this.availability.availability_hours_per_week)
+  ) {
+    completedSteps++;
+  }
+
+  const percentage = Math.round((completedSteps / totalSteps) * 100);
+
+  // Build missing sections list (human-friendly titles)
+  const missingSections = [];
+  if (!this.profilePhoto || !this.profilePhoto.url)
+    missingSections.push("Profile Photo");
+  if (!this.bio || this.bio.trim().length <= 50)
+    missingSections.push("Professional Bio");
+  if (!this.experiences || this.experiences.length === 0)
+    missingSections.push("Work Experience");
+  if (!this.skills || this.skills.length < 3)
+    missingSections.push("Skills & Expertise");
+  if (!this.certifications || this.certifications.length === 0)
+    missingSections.push("Certifications");
+  if (!this.documents || this.documents.length === 0)
+    missingSections.push("Documents");
+  if (
+    !(
+      (this.availability && this.availability.weeklySchedule) ||
+      (this.availability && this.availability.hoursPerWeek) ||
+      (this.availability && this.availability.availability_hours_per_week)
+    )
+  ) {
+    missingSections.push("Availability");
+  }
+
+  return {
+    percentage,
+    completedSteps,
+    totalSteps,
+    missingSections,
+  };
 };
 
 module.exports = mongoose.model("User", UserSchema);

@@ -1,6 +1,12 @@
+// ============================================================================
+// IMPORTS
+// ============================================================================
 import React, { useState, useEffect } from "react";
-import { useAuth } from "../context/AuthContext";
 import { useNavigate, useParams } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
+import { useAuth } from "../context/AuthContext";
+import { jobAPI, handleApiError } from "../api";
 import {
   ArrowLeft,
   ArrowRight,
@@ -16,38 +22,36 @@ import {
   AlertCircle,
   CheckCircle,
   Calendar,
-  Users,
   Briefcase,
   Target,
   Settings,
   Upload,
   Award,
   Globe,
-  Shield,
-  Zap,
   BookOpen,
   Building,
   Mail,
   Phone,
-  Camera,
   Send,
+  Zap,
 } from "lucide-react";
 
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
 const JobPosting = () => {
-  const { user } = useAuth();
+  // --------------------------------------------------------------------------
+  // HOOKS & STATE
+  // --------------------------------------------------------------------------
+  const { user, isSenior } = useAuth();
   const navigate = useNavigate();
   const { jobId } = useParams();
-  const isEditing = !!jobId;
+  const queryClient = useQueryClient();
+  const isEditing = Boolean(jobId);
 
   // Multi-step form state
   const [currentStep, setCurrentStep] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [validationErrors, setValidationErrors] = useState({});
-
-  // Auto-save state
   const [lastSaved, setLastSaved] = useState(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -58,90 +62,224 @@ const JobPosting = () => {
     category: "",
     description: "",
     specialty: "",
-    subspecialties: [],
+    subSpecialties: [],
 
     // Requirements
-    experienceLevel: "",
-    requiredSkills: [],
+    experience_required: {
+      minimum_years: "",
+      level: "",
+    },
+    skills_required: [],
     certifications: [],
     languages: [],
-    educationLevel: "",
 
     // Budget & Timeline
-    budgetType: "fixed", // fixed, hourly, milestone
-    budgetAmount: "",
-    budgetMin: "",
-    budgetMax: "",
-    timeline: "",
-    startDate: "",
-    deadline: "",
+    budget: {
+      type: "fixed", // fixed, hourly, negotiable
+      amount: "",
+      currency: "USD",
+      negotiable: false,
+    },
+    timeline: {
+      estimated_hours: "",
+      deadline: "",
+    },
     expectedDuration: "",
-    hoursPerWeek: "",
 
     // Preferences & Settings
-    locationPreference: "remote",
-    timezonePreference: "",
-    equipmentProvided: false,
-    trainingProvided: false,
+    requirements: {
+      location_preference: "remote",
+      timezone: "",
+      equipment_provided: false,
+      training_provided: false,
+    },
 
     // Matching Settings
     autoMatch: true,
-    visibility: "public", // public, verified_only, invitation_only
+    visibility: "public",
     featured: false,
-    applicationDeadline: "",
+    application_deadline: "",
 
     // Additional Details
     responsibilities: [],
     benefits: [],
-    attachments: [],
-    screeningQuestions: [],
+    screening_questions: [],
 
-    // Contact & Company Info
-    contactEmail: user?.email || "",
-    contactPhone: user?.phone || "",
-    companyInfo: {
-      name: "",
-      description: "",
-      website: "",
-      size: "",
-      location: "",
+    // Contact Info
+    contact_email: user?.email || "",
+    contact_phone: user?.phone || "",
+  });
+
+  // --------------------------------------------------------------------------
+  // DATA FETCHING
+  // --------------------------------------------------------------------------
+
+  // Load existing job if editing
+  const { data: existingJob, isLoading: loadingJob } = useQuery({
+    queryKey: ["job", jobId],
+    queryFn: () => jobAPI.getById(jobId),
+    enabled: Boolean(jobId),
+    onSuccess: (response) => {
+      const job = response.data;
+      setJobData({
+        title: job.title || "",
+        category: job.category || "",
+        description: job.description || "",
+        specialty: job.specialty || "",
+        subSpecialties: job.subSpecialties || [],
+        experience_required: job.experience_required || {
+          minimum_years: "",
+          level: "",
+        },
+        skills_required: job.skills_required || [],
+        certifications: job.certifications || [],
+        languages: job.languages || [],
+        budget: job.budget || {
+          type: "fixed",
+          amount: "",
+          currency: "USD",
+          negotiable: false,
+        },
+        timeline: job.timeline || {
+          estimated_hours: "",
+          deadline: "",
+        },
+        expectedDuration: job.expectedDuration || "",
+        requirements: job.requirements || {
+          location_preference: "remote",
+          timezone: "",
+          equipment_provided: false,
+          training_provided: false,
+        },
+        autoMatch: job.autoMatch !== undefined ? job.autoMatch : true,
+        visibility: job.visibility || "public",
+        featured: job.featured || false,
+        application_deadline: job.application_deadline || "",
+        responsibilities: job.responsibilities || [],
+        benefits: job.benefits || [],
+        screening_questions: job.screening_questions || [],
+        contact_email: job.contact_email || user?.email || "",
+        contact_phone: job.contact_phone || user?.phone || "",
+      });
+    },
+    onError: (error) => {
+      const errorInfo = handleApiError(error);
+      toast.error(errorInfo.message);
+      navigate("/jobs/manage");
     },
   });
 
-  // Form validation schemas
-  const validationSchema = {
-    1: {
-      title: { required: true, minLength: 10, maxLength: 100 },
-      category: { required: true },
-      description: { required: true, minLength: 100 },
-      specialty: { required: true },
-    },
-    2: {
-      experienceLevel: { required: true },
-      requiredSkills: { required: true, minLength: 1 },
-    },
-    3: {
-      budgetType: { required: true },
-      budgetAmount: { required: true, min: 1 },
-    },
-    4: {
-      locationPreference: { required: true },
-    },
-    5: {}, // Review step - no additional validation
-  };
+  // --------------------------------------------------------------------------
+  // MUTATIONS
+  // --------------------------------------------------------------------------
 
-  // Static data
+  // Create job mutation
+  const createJobMutation = useMutation({
+    mutationFn: (data) => jobAPI.create(data),
+    onSuccess: (response) => {
+      toast.success("Job posted successfully!");
+      setHasUnsavedChanges(false);
+      queryClient.invalidateQueries(["my-jobs"]);
+      queryClient.invalidateQueries(["jobs-browse"]);
+      setTimeout(() => {
+        navigate("/jobs/manage");
+      }, 1500);
+    },
+    onError: (error) => {
+      const errorInfo = handleApiError(error);
+      toast.error(errorInfo.message);
+      if (errorInfo.errors) {
+        const fieldErrors = {};
+        errorInfo.errors.forEach((err) => {
+          fieldErrors[err.field] = err.message;
+        });
+        setValidationErrors(fieldErrors);
+      }
+    },
+  });
+
+  // Update job mutation
+  const updateJobMutation = useMutation({
+    mutationFn: (data) => jobAPI.update(jobId, data),
+    onSuccess: (response) => {
+      toast.success("Job updated successfully!");
+      setHasUnsavedChanges(false);
+      queryClient.invalidateQueries(["job", jobId]);
+      queryClient.invalidateQueries(["my-jobs"]);
+      setTimeout(() => {
+        navigate("/jobs/manage");
+      }, 1500);
+    },
+    onError: (error) => {
+      const errorInfo = handleApiError(error);
+      toast.error(errorInfo.message);
+      if (errorInfo.errors) {
+        const fieldErrors = {};
+        errorInfo.errors.forEach((err) => {
+          fieldErrors[err.field] = err.message;
+        });
+        setValidationErrors(fieldErrors);
+      }
+    },
+  });
+
+  // Save draft mutation (create with status: draft)
+  const saveDraftMutation = useMutation({
+    mutationFn: (data) => {
+      const draftData = { ...data, status: "draft" };
+      return isEditing
+        ? jobAPI.update(jobId, draftData)
+        : jobAPI.create(draftData);
+    },
+    onSuccess: () => {
+      toast.success("Draft saved successfully!");
+      setLastSaved(new Date());
+      setHasUnsavedChanges(false);
+      queryClient.invalidateQueries(["my-jobs"]);
+    },
+    onError: (error) => {
+      const errorInfo = handleApiError(error);
+      toast.error(`Failed to save draft: ${errorInfo.message}`);
+    },
+  });
+
+  // --------------------------------------------------------------------------
+  // AUTO-SAVE FUNCTIONALITY
+  // --------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (hasUnsavedChanges && !saveDraftMutation.isLoading) {
+      const timer = setTimeout(() => {
+        saveDraft();
+      }, 30000); // Auto-save every 30 seconds
+
+      return () => clearTimeout(timer);
+    }
+  }, [jobData, hasUnsavedChanges]);
+
+  // Handle beforeunload for unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  // --------------------------------------------------------------------------
+  // STATIC DATA
+  // --------------------------------------------------------------------------
+
   const categories = [
-    "Consultation",
-    "Second Opinion",
-    "Chart Review",
-    "Research Support",
-    "Medical Writing",
-    "Teaching/Training",
-    "Administrative Support",
-    "Telemedicine",
-    "Emergency Coverage",
-    "Other",
+    "consultation",
+    "research",
+    "documentation",
+    "review",
+    "telemedicine",
   ];
 
   const specialties = [
@@ -169,31 +307,41 @@ const JobPosting = () => {
 
   const experienceLevels = [
     {
-      value: "entry",
-      label: "Entry Level (0-2 years)",
-      desc: "Recent graduates or early career",
+      value: "resident",
+      label: "Resident",
+      years: "0-3",
+      desc: "In training program",
     },
     {
-      value: "mid",
-      label: "Mid Level (3-7 years)",
-      desc: "Established practice experience",
+      value: "junior",
+      label: "Junior",
+      years: "0-3",
+      desc: "Early career doctor",
+    },
+    {
+      value: "mid-level",
+      label: "Mid-Level",
+      years: "3-7",
+      desc: "Established practice",
     },
     {
       value: "senior",
-      label: "Senior Level (8-15 years)",
-      desc: "Extensive clinical experience",
+      label: "Senior",
+      years: "8-15",
+      desc: "Extensive experience",
     },
     {
-      value: "expert",
-      label: "Expert Level (15+ years)",
-      desc: "Recognized expertise and leadership",
+      value: "attending",
+      label: "Attending",
+      years: "15+",
+      desc: "Expert physician",
     },
   ];
 
   const timelineOptions = [
     {
       value: "urgent",
-      label: "Urgent (within 24 hours)",
+      label: "Urgent (24 hours)",
       desc: "Immediate need",
     },
     {
@@ -210,11 +358,6 @@ const JobPosting = () => {
       value: "long",
       label: "Long-term (1+ months)",
       desc: "Extended engagement",
-    },
-    {
-      value: "ongoing",
-      label: "Ongoing/Recurring",
-      desc: "Continuous collaboration",
     },
   ];
 
@@ -252,51 +395,94 @@ const JobPosting = () => {
     },
   ];
 
-  // Load existing job data if editing
-  useEffect(() => {
-    if (isEditing) {
-      loadJobData();
-    }
-  }, [jobId, isEditing]);
+  // --------------------------------------------------------------------------
+  // FORM VALIDATION
+  // --------------------------------------------------------------------------
 
-  // Auto-save functionality
-  useEffect(() => {
-    if (hasUnsavedChanges) {
-      const timer = setTimeout(() => {
-        saveDraft();
-      }, 30000); // Auto-save every 30 seconds
-
-      return () => clearTimeout(timer);
-    }
-  }, [jobData, hasUnsavedChanges]);
-
-  // Handle beforeunload for unsaved changes
-  useEffect(() => {
-    const handleBeforeUnload = (e) => {
-      if (hasUnsavedChanges) {
-        e.preventDefault();
-        e.returnValue = "";
-      }
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [hasUnsavedChanges]);
-
-  const loadJobData = async () => {
-    try {
-      setLoading(true);
-      // API call would be here to load existing job data
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      // setJobData(existingJobData);
-    } catch (err) {
-      setError("Failed to load job data");
-    } finally {
-      setLoading(false);
-    }
+  const validationSchema = {
+    1: {
+      title: { required: true, minLength: 10, maxLength: 100 },
+      category: { required: true },
+      description: { required: true, minLength: 50, maxLength: 2000 },
+      specialty: { required: true },
+    },
+    2: {
+      "experience_required.level": { required: true },
+      skills_required: { required: true, minLength: 1 },
+    },
+    3: {
+      "budget.type": { required: true },
+      "budget.amount": { required: true, min: 1 },
+      "timeline.deadline": { required: true },
+    },
+    4: {
+      "requirements.location_preference": { required: true },
+    },
+    5: {}, // Review step - no additional validation
   };
 
-  // Handle input changes with validation
+  const validateField = (field, value, rules) => {
+    const errors = [];
+
+    if (
+      rules.required &&
+      (!value || (Array.isArray(value) && value.length === 0))
+    ) {
+      errors.push(`This field is required`);
+    }
+
+    if (rules.minLength && value && value.length < rules.minLength) {
+      errors.push(`Minimum ${rules.minLength} characters required`);
+    }
+
+    if (rules.maxLength && value && value.length > rules.maxLength) {
+      errors.push(`Maximum ${rules.maxLength} characters allowed`);
+    }
+
+    if (rules.min && value && Number(value) < rules.min) {
+      errors.push(`Minimum value is ${rules.min}`);
+    }
+
+    return errors;
+  };
+
+  const getNestedValue = (obj, path) => {
+    return path.split(".").reduce((current, key) => current?.[key], obj);
+  };
+
+  const validateStep = (step) => {
+    const stepRules = validationSchema[step];
+    const errors = {};
+    let isValid = true;
+
+    Object.keys(stepRules).forEach((field) => {
+      const value = getNestedValue(jobData, field);
+      const fieldErrors = validateField(field, value, stepRules[field]);
+      if (fieldErrors.length > 0) {
+        errors[field] = fieldErrors[0];
+        isValid = false;
+      }
+    });
+
+    setValidationErrors(errors);
+    return isValid;
+  };
+
+  const validateAllSteps = () => {
+    for (let step = 1; step <= 4; step++) {
+      if (!validateStep(step)) {
+        setCurrentStep(step);
+        toast.error(`Please complete all required fields in Step ${step}`);
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // --------------------------------------------------------------------------
+  // EVENT HANDLERS
+  // --------------------------------------------------------------------------
+
   const handleInputChange = (field, value) => {
     setJobData((prev) => ({
       ...prev,
@@ -304,16 +490,16 @@ const JobPosting = () => {
     }));
     setHasUnsavedChanges(true);
 
-    // Clear validation error for this field
+    // Clear validation error
     if (validationErrors[field]) {
-      setValidationErrors((prev) => ({
-        ...prev,
-        [field]: null,
-      }));
+      setValidationErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
     }
   };
 
-  // Handle nested input changes
   const handleNestedInputChange = (section, field, value) => {
     setJobData((prev) => ({
       ...prev,
@@ -325,7 +511,6 @@ const JobPosting = () => {
     setHasUnsavedChanges(true);
   };
 
-  // Handle array fields
   const addArrayItem = (field, item) => {
     if (item && !jobData[field].includes(item)) {
       setJobData((prev) => ({
@@ -344,189 +529,53 @@ const JobPosting = () => {
     setHasUnsavedChanges(true);
   };
 
-  // Validation functions
-  const validateField = (field, value, rules) => {
-    const errors = [];
-
-    if (
-      rules.required &&
-      (!value || (Array.isArray(value) && value.length === 0))
-    ) {
-      errors.push(`${field} is required`);
-    }
-
-    if (rules.minLength && value && value.length < rules.minLength) {
-      errors.push(`${field} must be at least ${rules.minLength} characters`);
-    }
-
-    if (rules.maxLength && value && value.length > rules.maxLength) {
-      errors.push(
-        `${field} must be no more than ${rules.maxLength} characters`
-      );
-    }
-
-    if (rules.min && value && Number(value) < rules.min) {
-      errors.push(`${field} must be at least ${rules.min}`);
-    }
-
-    return errors;
-  };
-
-  const validateStep = (step) => {
-    const stepRules = validationSchema[step];
-    const errors = {};
-    let isValid = true;
-
-    Object.keys(stepRules).forEach((field) => {
-      const fieldErrors = validateField(
-        field,
-        jobData[field],
-        stepRules[field]
-      );
-      if (fieldErrors.length > 0) {
-        errors[field] = fieldErrors[0];
-        isValid = false;
-      }
-    });
-
-    setValidationErrors(errors);
-    return isValid;
-  };
-
   // Navigation between steps
   const nextStep = () => {
     if (validateStep(currentStep)) {
       setCurrentStep((prev) => Math.min(prev + 1, 5));
-      setError("");
     } else {
-      setError("Please fix the validation errors before continuing.");
+      toast.error("Please fix the validation errors before continuing");
     }
   };
 
   const prevStep = () => {
     setCurrentStep((prev) => Math.max(prev - 1, 1));
-    setError("");
   };
 
   const goToStep = (step) => {
     if (step <= currentStep || validateStep(currentStep)) {
       setCurrentStep(step);
-      setError("");
     }
   };
 
   // Save as draft
   const saveDraft = async () => {
-    setSaving(true);
-    try {
-      // API call to save draft
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      setLastSaved(new Date());
-      setHasUnsavedChanges(false);
-      setSuccess("Draft saved successfully!");
-      setTimeout(() => setSuccess(""), 3000);
-    } catch (err) {
-      setError("Failed to save draft");
-    } finally {
-      setSaving(false);
-    }
+    if (saveDraftMutation.isLoading) return;
+
+    saveDraftMutation.mutate(jobData);
   };
 
   // Submit job posting
   const submitJob = async () => {
     if (!validateAllSteps()) return;
 
-    setLoading(true);
-    try {
-      // API call to submit job
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      setSuccess("Job posted successfully!");
-      setHasUnsavedChanges(false);
-      setTimeout(() => {
-        navigate("/jobs/manage");
-      }, 2000);
-    } catch (err) {
-      setError("Failed to post job");
-    } finally {
-      setLoading(false);
+    // Prepare data for submission
+    const submissionData = {
+      ...jobData,
+      status: "active", // Mark as active when publishing
+    };
+
+    if (isEditing) {
+      updateJobMutation.mutate(submissionData);
+    } else {
+      createJobMutation.mutate(submissionData);
     }
   };
 
-  const validateAllSteps = () => {
-    for (let step = 1; step <= 4; step++) {
-      if (!validateStep(step)) {
-        setCurrentStep(step);
-        return false;
-      }
-    }
-    return true;
-  };
+  // --------------------------------------------------------------------------
+  // SUB-COMPONENTS
+  // --------------------------------------------------------------------------
 
-  // Step indicator component
-  const StepIndicator = () => (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
-      <div className="flex items-center justify-between">
-        {steps.map((step, index) => {
-          const Icon = step.icon;
-          const isActive = currentStep === step.number;
-          const isCompleted = currentStep > step.number;
-          const isAccessible =
-            step.number <= currentStep || validateStep(currentStep);
-
-          return (
-            <div key={step.number} className="flex items-center">
-              <div className="flex flex-col items-center">
-                <button
-                  onClick={() => isAccessible && goToStep(step.number)}
-                  disabled={!isAccessible}
-                  className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${
-                    isCompleted
-                      ? "bg-green-500 text-white shadow-lg"
-                      : isActive
-                      ? "bg-blue-600 text-white shadow-lg scale-110"
-                      : isAccessible
-                      ? "bg-gray-100 text-gray-600 hover:bg-gray-200 hover:scale-105"
-                      : "bg-gray-50 text-gray-300 cursor-not-allowed"
-                  }`}
-                >
-                  {isCompleted ? (
-                    <CheckCircle className="w-6 h-6" />
-                  ) : (
-                    <Icon className="w-6 h-6" />
-                  )}
-                </button>
-                <div className="mt-3 text-center max-w-24">
-                  <p
-                    className={`text-sm font-medium ${
-                      isActive
-                        ? "text-blue-600"
-                        : isCompleted
-                        ? "text-green-600"
-                        : "text-gray-500"
-                    }`}
-                  >
-                    {step.title}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    {step.description}
-                  </p>
-                </div>
-              </div>
-              {index < steps.length - 1 && (
-                <div
-                  className={`w-16 h-0.5 mx-4 ${
-                    currentStep > step.number ? "bg-green-500" : "bg-gray-200"
-                  }`}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-
-  // Form field components
   const FormField = ({ label, required, error, children, description }) => (
     <div className="space-y-2">
       <label className="block text-sm font-medium text-gray-700">
@@ -570,6 +619,7 @@ const JobPosting = () => {
             >
               <span>{item}</span>
               <button
+                type="button"
                 onClick={() => onChange(value.filter((_, i) => i !== index))}
                 className="hover:bg-blue-200 rounded-full p-1"
               >
@@ -619,6 +669,70 @@ const JobPosting = () => {
     );
   };
 
+  const StepIndicator = () => (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+      <div className="flex items-center justify-between">
+        {steps.map((step, index) => {
+          const Icon = step.icon;
+          const isActive = currentStep === step.number;
+          const isCompleted = currentStep > step.number;
+          const isAccessible =
+            step.number <= currentStep || validateStep(currentStep);
+
+          return (
+            <div key={step.number} className="flex items-center">
+              <div className="flex flex-col items-center">
+                <button
+                  type="button"
+                  onClick={() => isAccessible && goToStep(step.number)}
+                  disabled={!isAccessible}
+                  className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${
+                    isCompleted
+                      ? "bg-green-500 text-white shadow-lg"
+                      : isActive
+                      ? "bg-blue-600 text-white shadow-lg scale-110"
+                      : isAccessible
+                      ? "bg-gray-100 text-gray-600 hover:bg-gray-200 hover:scale-105"
+                      : "bg-gray-50 text-gray-300 cursor-not-allowed"
+                  }`}
+                >
+                  {isCompleted ? (
+                    <CheckCircle className="w-6 h-6" />
+                  ) : (
+                    <Icon className="w-6 h-6" />
+                  )}
+                </button>
+                <div className="mt-3 text-center max-w-24">
+                  <p
+                    className={`text-sm font-medium ${
+                      isActive
+                        ? "text-blue-600"
+                        : isCompleted
+                        ? "text-green-600"
+                        : "text-gray-500"
+                    }`}
+                  >
+                    {step.title}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1 hidden lg:block">
+                    {step.description}
+                  </p>
+                </div>
+              </div>
+              {index < steps.length - 1 && (
+                <div
+                  className={`w-16 h-0.5 mx-4 ${
+                    currentStep > step.number ? "bg-green-500" : "bg-gray-200"
+                  }`}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   // Step 1: Basic Information
   const BasicInformationStep = () => (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
@@ -636,7 +750,7 @@ const JobPosting = () => {
           label="Job Title"
           required
           error={validationErrors.title}
-          description="Create a clear, specific title that describes the role"
+          description="Create a clear, specific title (10-100 characters)"
         >
           <input
             type="text"
@@ -670,7 +784,7 @@ const JobPosting = () => {
               <option value="">Select Category</option>
               {categories.map((category) => (
                 <option key={category} value={category}>
-                  {category}
+                  {category.charAt(0).toUpperCase() + category.slice(1)}
                 </option>
               ))}
             </select>
@@ -705,7 +819,7 @@ const JobPosting = () => {
           label="Job Description"
           required
           error={validationErrors.description}
-          description="Detailed description of the project, requirements, and expectations (minimum 100 characters)"
+          description="Detailed description (minimum 50 characters, maximum 2000)"
         >
           <textarea
             value={jobData.description}
@@ -717,11 +831,12 @@ const JobPosting = () => {
                 : "border-gray-300"
             }`}
             placeholder="Describe the project requirements, expectations, deliverables, and any specific details..."
+            maxLength={2000}
           />
           <div className="flex justify-between text-xs text-gray-500">
             <span>
-              {jobData.description.length >= 100 ? "✓" : "⚠️"}{" "}
-              {jobData.description.length}/100 characters minimum
+              {jobData.description.length >= 50 ? "✓" : "⚠"}{" "}
+              {jobData.description.length}/50 minimum
             </span>
             <span>{jobData.description.length}/2000 characters</span>
           </div>
@@ -732,12 +847,12 @@ const JobPosting = () => {
           description="Additional specialties that would be beneficial (optional)"
         >
           <TagInput
-            value={jobData.subspecialties}
+            value={jobData.subSpecialties}
             onChange={(newSubspecialties) =>
-              handleInputChange("subspecialties", newSubspecialties)
+              handleInputChange("subSpecialties", newSubspecialties)
             }
             onAdd={(subspecialty) =>
-              addArrayItem("subspecialties", subspecialty)
+              addArrayItem("subSpecialties", subspecialty)
             }
             placeholder="Add subspecialty (e.g., Interventional Cardiology)"
             suggestions={[
@@ -791,7 +906,7 @@ const JobPosting = () => {
         <FormField
           label="Experience Level Required"
           required
-          error={validationErrors.experienceLevel}
+          error={validationErrors["experience_required.level"]}
           description="Select the minimum experience level needed"
         >
           <div className="space-y-3">
@@ -799,7 +914,7 @@ const JobPosting = () => {
               <label
                 key={level.value}
                 className={`flex items-start space-x-4 p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                  jobData.experienceLevel === level.value
+                  jobData.experience_required.level === level.value
                     ? "border-blue-500 bg-blue-50"
                     : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                 }`}
@@ -808,15 +923,21 @@ const JobPosting = () => {
                   type="radio"
                   name="experienceLevel"
                   value={level.value}
-                  checked={jobData.experienceLevel === level.value}
+                  checked={jobData.experience_required.level === level.value}
                   onChange={(e) =>
-                    handleInputChange("experienceLevel", e.target.value)
+                    handleNestedInputChange(
+                      "experience_required",
+                      "level",
+                      e.target.value
+                    )
                   }
                   className="w-4 h-4 text-blue-600 mt-1"
                 />
                 <div className="flex-1">
                   <p className="font-semibold text-gray-900">{level.label}</p>
-                  <p className="text-sm text-gray-600">{level.desc}</p>
+                  <p className="text-sm text-gray-600">
+                    {level.years} years • {level.desc}
+                  </p>
                 </div>
               </label>
             ))}
@@ -826,15 +947,15 @@ const JobPosting = () => {
         <FormField
           label="Required Skills"
           required
-          error={validationErrors.requiredSkills}
+          error={validationErrors.skills_required}
           description="Essential skills and expertise needed (minimum 1 required)"
         >
           <TagInput
-            value={jobData.requiredSkills}
+            value={jobData.skills_required}
             onChange={(newSkills) =>
-              handleInputChange("requiredSkills", newSkills)
+              handleInputChange("skills_required", newSkills)
             }
-            onAdd={(skill) => addArrayItem("requiredSkills", skill)}
+            onAdd={(skill) => addArrayItem("skills_required", skill)}
             placeholder="Add required skill (e.g., Echocardiography)"
             suggestions={[
               "Echocardiography",
@@ -858,7 +979,7 @@ const JobPosting = () => {
             onAdd={(certification) =>
               addArrayItem("certifications", certification)
             }
-            placeholder="Add certification requirement (e.g., Board Certified in Cardiology)"
+            placeholder="Add certification (e.g., Board Certified in Cardiology)"
             suggestions={[
               "Board Certified in Cardiology",
               "ACLS Certification",
@@ -868,49 +989,27 @@ const JobPosting = () => {
           />
         </FormField>
 
-        <div className="grid md:grid-cols-2 gap-6">
-          <FormField
-            label="Education Level"
-            description="Minimum education requirement"
-          >
-            <select
-              value={jobData.educationLevel}
-              onChange={(e) =>
-                handleInputChange("educationLevel", e.target.value)
-              }
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">No specific requirement</option>
-              <option value="md">Doctor of Medicine (MD)</option>
-              <option value="do">Doctor of Osteopathic Medicine (DO)</option>
-              <option value="phd">PhD in Medical Science</option>
-              <option value="residency">Completed Residency</option>
-              <option value="fellowship">Completed Fellowship</option>
-            </select>
-          </FormField>
-
-          <FormField
-            label="Language Requirements"
-            description="Languages that should be spoken"
-          >
-            <TagInput
-              value={jobData.languages}
-              onChange={(newLanguages) =>
-                handleInputChange("languages", newLanguages)
-              }
-              onAdd={(language) => addArrayItem("languages", language)}
-              placeholder="Add language (e.g., Spanish)"
-              suggestions={[
-                "Spanish",
-                "French",
-                "German",
-                "Mandarin",
-                "Portuguese",
-                "Arabic",
-              ]}
-            />
-          </FormField>
-        </div>
+        <FormField
+          label="Language Requirements"
+          description="Languages that should be spoken (optional)"
+        >
+          <TagInput
+            value={jobData.languages}
+            onChange={(newLanguages) =>
+              handleInputChange("languages", newLanguages)
+            }
+            onAdd={(language) => addArrayItem("languages", language)}
+            placeholder="Add language (e.g., Spanish)"
+            suggestions={[
+              "Spanish",
+              "French",
+              "German",
+              "Mandarin",
+              "Portuguese",
+              "Arabic",
+            ]}
+          />
+        </FormField>
       </div>
     </div>
   );
@@ -931,7 +1030,7 @@ const JobPosting = () => {
         <FormField
           label="Budget Type"
           required
-          error={validationErrors.budgetType}
+          error={validationErrors["budget.type"]}
           description="Choose how you want to structure payments"
         >
           <div className="grid md:grid-cols-3 gap-4">
@@ -939,7 +1038,7 @@ const JobPosting = () => {
               {
                 value: "fixed",
                 label: "Fixed Price",
-                desc: "One-time payment for the entire project",
+                desc: "One-time payment for entire project",
                 icon: Target,
               },
               {
@@ -949,9 +1048,9 @@ const JobPosting = () => {
                 icon: Clock,
               },
               {
-                value: "milestone",
-                label: "Milestone-based",
-                desc: "Payments tied to project milestones",
+                value: "negotiable",
+                label: "Negotiable",
+                desc: "Open to discussion",
                 icon: Award,
               },
             ].map((type) => {
@@ -960,7 +1059,7 @@ const JobPosting = () => {
                 <label
                   key={type.value}
                   className={`p-6 border-2 rounded-lg cursor-pointer transition-all ${
-                    jobData.budgetType === type.value
+                    jobData.budget.type === type.value
                       ? "border-blue-500 bg-blue-50"
                       : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                   }`}
@@ -969,9 +1068,9 @@ const JobPosting = () => {
                     type="radio"
                     name="budgetType"
                     value={type.value}
-                    checked={jobData.budgetType === type.value}
+                    checked={jobData.budget.type === type.value}
                     onChange={(e) =>
-                      handleInputChange("budgetType", e.target.value)
+                      handleNestedInputChange("budget", "type", e.target.value)
                     }
                     className="sr-only"
                   />
@@ -988,190 +1087,109 @@ const JobPosting = () => {
           </div>
         </FormField>
 
-        <FormField
-          label="Budget Amount"
-          required
-          error={validationErrors.budgetAmount}
-          description={
-            jobData.budgetType === "hourly"
-              ? "Enter your hourly rate in USD. Typical rates: $50-200/hour"
-              : jobData.budgetType === "milestone"
-              ? "Enter total project value to be paid across milestones"
-              : "Enter the total fixed amount for the entire project"
-          }
-        >
-          <div className="relative">
-            <DollarSign className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-            <input
-              type="number"
-              value={jobData.budgetAmount}
-              onChange={(e) =>
-                handleInputChange("budgetAmount", e.target.value)
-              }
-              className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                validationErrors.budgetAmount
-                  ? "border-red-300"
-                  : "border-gray-300"
-              }`}
-              placeholder={jobData.budgetType === "hourly" ? "75" : "2500"}
-              min="1"
-              step={jobData.budgetType === "hourly" ? "5" : "100"}
-            />
-          </div>
-          {jobData.budgetType === "hourly" && (
-            <div className="text-sm text-gray-500 mt-2">
-              <div className="flex justify-between">
-                <span>Entry level: $25-50/hour</span>
-                <span>Expert level: $100-200/hour</span>
-              </div>
-            </div>
-          )}
-        </FormField>
-
-        {/* Budget Range for flexible pricing */}
-        {jobData.budgetType !== "hourly" && (
-          <div className="grid md:grid-cols-2 gap-6">
-            <FormField
-              label="Minimum Budget"
-              description="Minimum acceptable amount"
-            >
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                <input
-                  type="number"
-                  value={jobData.budgetMin}
-                  onChange={(e) =>
-                    handleInputChange("budgetMin", e.target.value)
-                  }
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="2000"
-                />
-              </div>
-            </FormField>
-
-            <FormField
-              label="Maximum Budget"
-              description="Maximum you're willing to pay"
-            >
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                <input
-                  type="number"
-                  value={jobData.budgetMax}
-                  onChange={(e) =>
-                    handleInputChange("budgetMax", e.target.value)
-                  }
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="5000"
-                />
-              </div>
-            </FormField>
-          </div>
-        )}
-
-        <FormField
-          label="Project Timeline"
-          required
-          description="How quickly do you need this completed?"
-        >
-          <div className="space-y-3">
-            {timelineOptions.map((option) => (
-              <label
-                key={option.value}
-                className={`flex items-center space-x-4 p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                  jobData.timeline === option.value
-                    ? "border-blue-500 bg-blue-50"
-                    : "border-gray-200 hover:border-gray-300"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="timeline"
-                  value={option.value}
-                  checked={jobData.timeline === option.value}
-                  onChange={(e) =>
-                    handleInputChange("timeline", e.target.value)
-                  }
-                  className="w-4 h-4 text-blue-600"
-                />
-                <div className="flex-1">
-                  <p className="font-medium text-gray-900">{option.label}</p>
-                  <p className="text-sm text-gray-600">{option.desc}</p>
-                </div>
-              </label>
-            ))}
-          </div>
-        </FormField>
-
-        <div className="grid md:grid-cols-2 gap-6">
+        {jobData.budget.type !== "negotiable" && (
           <FormField
-            label="Preferred Start Date"
-            description="When would you like to begin?"
+            label="Budget Amount"
+            required
+            error={validationErrors["budget.amount"]}
+            description={
+              jobData.budget.type === "hourly"
+                ? "Enter your hourly rate in USD. Typical rates: $50-200/hour"
+                : "Enter the total fixed amount for the entire project"
+            }
           >
-            <input
-              type="date"
-              value={jobData.startDate}
-              onChange={(e) => handleInputChange("startDate", e.target.value)}
-              min={new Date().toISOString().split("T")[0]}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </FormField>
-
-          <FormField
-            label="Project Deadline"
-            description="Final completion date"
-          >
-            <input
-              type="date"
-              value={jobData.deadline}
-              onChange={(e) => handleInputChange("deadline", e.target.value)}
-              min={jobData.startDate || new Date().toISOString().split("T")[0]}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </FormField>
-        </div>
-
-        {jobData.budgetType === "hourly" && (
-          <div className="grid md:grid-cols-2 gap-6">
-            <FormField
-              label="Expected Hours per Week"
-              description="Estimated weekly time commitment"
-            >
+            <div className="relative">
+              <DollarSign className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
               <input
                 type="number"
-                value={jobData.hoursPerWeek}
+                value={jobData.budget.amount}
                 onChange={(e) =>
-                  handleInputChange("hoursPerWeek", e.target.value)
+                  handleNestedInputChange("budget", "amount", e.target.value)
                 }
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="10"
+                className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  validationErrors["budget.amount"]
+                    ? "border-red-300"
+                    : "border-gray-300"
+                }`}
+                placeholder={jobData.budget.type === "hourly" ? "75" : "2500"}
                 min="1"
-                max="40"
+                step={jobData.budget.type === "hourly" ? "5" : "100"}
               />
-            </FormField>
-
-            <FormField
-              label="Expected Duration"
-              description="How long will the project last?"
-            >
-              <select
-                value={jobData.expectedDuration}
-                onChange={(e) =>
-                  handleInputChange("expectedDuration", e.target.value)
-                }
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Select duration</option>
-                <option value="1-2 weeks">1-2 weeks</option>
-                <option value="3-4 weeks">3-4 weeks</option>
-                <option value="1-2 months">1-2 months</option>
-                <option value="3-6 months">3-6 months</option>
-                <option value="6+ months">6+ months</option>
-                <option value="ongoing">Ongoing</option>
-              </select>
-            </FormField>
-          </div>
+            </div>
+            {jobData.budget.type === "hourly" && (
+              <div className="text-sm text-gray-500 mt-2">
+                <div className="flex justify-between">
+                  <span>Entry level: $25-50/hour</span>
+                  <span>Expert level: $100-200/hour</span>
+                </div>
+              </div>
+            )}
+          </FormField>
         )}
+
+        <FormField
+          label="Project Deadline"
+          required
+          error={validationErrors["timeline.deadline"]}
+          description="Final completion date"
+        >
+          <input
+            type="date"
+            value={jobData.timeline.deadline}
+            onChange={(e) =>
+              handleNestedInputChange("timeline", "deadline", e.target.value)
+            }
+            min={new Date().toISOString().split("T")[0]}
+            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              validationErrors["timeline.deadline"]
+                ? "border-red-300"
+                : "border-gray-300"
+            }`}
+          />
+        </FormField>
+
+        {jobData.budget.type === "hourly" && (
+          <FormField
+            label="Estimated Hours"
+            description="Approximate total hours for the project"
+          >
+            <input
+              type="number"
+              value={jobData.timeline.estimated_hours}
+              onChange={(e) =>
+                handleNestedInputChange(
+                  "timeline",
+                  "estimated_hours",
+                  e.target.value
+                )
+              }
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="40"
+              min="1"
+            />
+          </FormField>
+        )}
+
+        <FormField
+          label="Expected Duration"
+          description="How long will the project last?"
+        >
+          <select
+            value={jobData.expectedDuration}
+            onChange={(e) =>
+              handleInputChange("expectedDuration", e.target.value)
+            }
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Select duration</option>
+            <option value="1-2 weeks">1-2 weeks</option>
+            <option value="3-4 weeks">3-4 weeks</option>
+            <option value="1-2 months">1-2 months</option>
+            <option value="3-6 months">3-6 months</option>
+            <option value="6+ months">6+ months</option>
+            <option value="ongoing">Ongoing</option>
+          </select>
+        </FormField>
       </div>
     </div>
   );
@@ -1192,6 +1210,7 @@ const JobPosting = () => {
         <FormField
           label="Work Location"
           required
+          error={validationErrors["requirements.location_preference"]}
           description="Where will the work be performed?"
         >
           <div className="space-y-3">
@@ -1205,7 +1224,7 @@ const JobPosting = () => {
               {
                 value: "hybrid",
                 label: "Hybrid",
-                desc: "Combination of remote and in-person work",
+                desc: "Combination of remote and in-person",
                 icon: Building,
               },
               {
@@ -1220,7 +1239,7 @@ const JobPosting = () => {
                 <label
                   key={option.value}
                   className={`flex items-center space-x-4 p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                    jobData.locationPreference === option.value
+                    jobData.requirements.location_preference === option.value
                       ? "border-blue-500 bg-blue-50"
                       : "border-gray-200 hover:border-gray-300"
                   }`}
@@ -1229,9 +1248,15 @@ const JobPosting = () => {
                     type="radio"
                     name="locationPreference"
                     value={option.value}
-                    checked={jobData.locationPreference === option.value}
+                    checked={
+                      jobData.requirements.location_preference === option.value
+                    }
                     onChange={(e) =>
-                      handleInputChange("locationPreference", e.target.value)
+                      handleNestedInputChange(
+                        "requirements",
+                        "location_preference",
+                        e.target.value
+                      )
                     }
                     className="w-4 h-4 text-blue-600"
                   />
@@ -1246,35 +1271,18 @@ const JobPosting = () => {
           </div>
         </FormField>
 
-        {jobData.locationPreference !== "remote" && (
-          <FormField
-            label="Work Location Details"
-            description="Specify the work location"
-          >
-            <input
-              type="text"
-              value={jobData.companyInfo.location}
-              onChange={(e) =>
-                handleNestedInputChange(
-                  "companyInfo",
-                  "location",
-                  e.target.value
-                )
-              }
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g., Los Angeles, CA or specific hospital address"
-            />
-          </FormField>
-        )}
-
         <FormField
           label="Timezone Preference"
           description="Preferred timezone for collaboration"
         >
           <select
-            value={jobData.timezonePreference}
+            value={jobData.requirements.timezone || ""}
             onChange={(e) =>
-              handleInputChange("timezonePreference", e.target.value)
+              handleNestedInputChange(
+                "requirements",
+                "timezone",
+                e.target.value
+              )
             }
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
@@ -1308,9 +1316,13 @@ const JobPosting = () => {
               </div>
               <input
                 type="checkbox"
-                checked={jobData.equipmentProvided}
+                checked={jobData.requirements.equipment_provided}
                 onChange={(e) =>
-                  handleInputChange("equipmentProvided", e.target.checked)
+                  handleNestedInputChange(
+                    "requirements",
+                    "equipment_provided",
+                    e.target.checked
+                  )
                 }
                 className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
               />
@@ -1328,9 +1340,13 @@ const JobPosting = () => {
               </div>
               <input
                 type="checkbox"
-                checked={jobData.trainingProvided}
+                checked={jobData.requirements.training_provided}
                 onChange={(e) =>
-                  handleInputChange("trainingProvided", e.target.checked)
+                  handleNestedInputChange(
+                    "requirements",
+                    "training_provided",
+                    e.target.checked
+                  )
                 }
                 className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
               />
@@ -1357,7 +1373,7 @@ const JobPosting = () => {
                 {
                   value: "verified_only",
                   label: "Verified Doctors Only",
-                  desc: "Only verified medical professionals can see and apply",
+                  desc: "Only verified medical professionals can see",
                 },
                 {
                   value: "invitation_only",
@@ -1439,9 +1455,9 @@ const JobPosting = () => {
         >
           <input
             type="date"
-            value={jobData.applicationDeadline}
+            value={jobData.application_deadline}
             onChange={(e) =>
-              handleInputChange("applicationDeadline", e.target.value)
+              handleInputChange("application_deadline", e.target.value)
             }
             min={new Date().toISOString().split("T")[0]}
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1453,11 +1469,11 @@ const JobPosting = () => {
           description="Optional questions for applicants to answer"
         >
           <TagInput
-            value={jobData.screeningQuestions}
+            value={jobData.screening_questions}
             onChange={(newQuestions) =>
-              handleInputChange("screeningQuestions", newQuestions)
+              handleInputChange("screening_questions", newQuestions)
             }
-            onAdd={(question) => addArrayItem("screeningQuestions", question)}
+            onAdd={(question) => addArrayItem("screening_questions", question)}
             placeholder="Add a screening question"
             suggestions={[
               "What is your experience with this specialty?",
@@ -1471,274 +1487,351 @@ const JobPosting = () => {
   );
 
   // Step 5: Review & Publish
-  const ReviewStep = () => (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Review & Publish
-        </h2>
-        <p className="text-gray-600">
-          Review your job posting before publishing
-        </p>
-      </div>
+  const ReviewStep = () => {
+    const allValid = validateAllSteps();
 
-      <div className="space-y-8">
-        {/* Job Preview */}
-        <div className="border border-gray-200 rounded-lg p-6">
-          <div className="flex items-start justify-between mb-6">
-            <div className="flex-1">
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                {jobData.title || "Untitled Job"}
-              </h3>
-              <div className="flex items-center space-x-4 text-sm text-gray-600 mb-4">
-                <span className="flex items-center space-x-1">
-                  <Briefcase className="w-4 h-4" />
-                  <span>{jobData.category || "No category"}</span>
-                </span>
-                <span className="flex items-center space-x-1">
-                  <Star className="w-4 h-4" />
-                  <span>{jobData.specialty || "No specialty"}</span>
-                </span>
-                <span className="flex items-center space-x-1">
-                  <Clock className="w-4 h-4" />
-                  <span>{jobData.timeline || "No timeline"}</span>
-                </span>
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            Review & Publish
+          </h2>
+          <p className="text-gray-600">
+            Review your job posting before publishing
+          </p>
+        </div>
+
+        <div className="space-y-8">
+          {/* Job Preview */}
+          <div className="border border-gray-200 rounded-lg p-6">
+            <div className="flex items-start justify-between mb-6">
+              <div className="flex-1">
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                  {jobData.title || "Untitled Job"}
+                </h3>
+                <div className="flex items-center space-x-4 text-sm text-gray-600 mb-4">
+                  <span className="flex items-center space-x-1">
+                    <Briefcase className="w-4 h-4" />
+                    <span>
+                      {jobData.category
+                        ? jobData.category.charAt(0).toUpperCase() +
+                          jobData.category.slice(1)
+                        : "No category"}
+                    </span>
+                  </span>
+                  <span className="flex items-center space-x-1">
+                    <Star className="w-4 h-4" />
+                    <span>{jobData.specialty || "No specialty"}</span>
+                  </span>
+                  <span className="flex items-center space-x-1">
+                    <MapPin className="w-4 h-4" />
+                    <span>
+                      {jobData.requirements.location_preference || "Remote"}
+                    </span>
+                  </span>
+                </div>
+              </div>
+
+              <div className="text-right">
+                <div className="text-2xl font-bold text-green-600 mb-1">
+                  {jobData.budget.type === "negotiable" ? (
+                    "Negotiable"
+                  ) : jobData.budget.amount ? (
+                    <>
+                      ${Number(jobData.budget.amount).toLocaleString()}
+                      {jobData.budget.type === "hourly" && "/hr"}
+                    </>
+                  ) : (
+                    "Budget not set"
+                  )}
+                </div>
+                <p className="text-sm text-gray-500 capitalize">
+                  {jobData.budget.type} payment
+                </p>
               </div>
             </div>
 
-            <div className="text-right">
-              <div className="text-2xl font-bold text-green-600 mb-1">
-                {jobData.budgetAmount ? (
-                  <>
-                    ${Number(jobData.budgetAmount).toLocaleString()}
-                    {jobData.budgetType === "hourly" && "/hr"}
-                    {jobData.budgetType === "milestone" && " total"}
-                  </>
-                ) : (
-                  "Budget not set"
-                )}
-              </div>
-              <p className="text-sm text-gray-500 capitalize">
-                {jobData.budgetType} {jobData.budgetType && "payment"}
+            <div className="prose max-w-none mb-6">
+              <p className="text-gray-700">
+                {jobData.description || "No description provided"}
               </p>
             </div>
-          </div>
 
-          <div className="prose max-w-none mb-6">
-            <p className="text-gray-700">
-              {jobData.description || "No description provided"}
-            </p>
-          </div>
+            {/* Requirements Summary */}
+            <div className="grid md:grid-cols-2 gap-6 mb-6">
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-3">
+                  Requirements
+                </h4>
+                <ul className="space-y-2 text-sm text-gray-600">
+                  <li className="flex items-center space-x-2">
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <span>
+                      Experience:{" "}
+                      {jobData.experience_required.level || "Not specified"}
+                    </span>
+                  </li>
+                  <li className="flex items-center space-x-2">
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <span>
+                      Skills: {jobData.skills_required.length} required
+                    </span>
+                  </li>
+                  <li className="flex items-center space-x-2">
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <span>
+                      Location: {jobData.requirements.location_preference}
+                    </span>
+                  </li>
+                </ul>
+              </div>
 
-          {/* Requirements Summary */}
-          <div className="grid md:grid-cols-2 gap-6 mb-6">
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-3">Requirements</h4>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li className="flex items-center space-x-2">
-                  <CheckCircle className="w-4 h-4 text-green-500" />
-                  <span>
-                    Experience: {jobData.experienceLevel || "Not specified"}
-                  </span>
-                </li>
-                <li className="flex items-center space-x-2">
-                  <CheckCircle className="w-4 h-4 text-green-500" />
-                  <span>Skills: {jobData.requiredSkills.length} required</span>
-                </li>
-                <li className="flex items-center space-x-2">
-                  <CheckCircle className="w-4 h-4 text-green-500" />
-                  <span>Location: {jobData.locationPreference}</span>
-                </li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-3">
-                Project Details
-              </h4>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li className="flex items-center space-x-2">
-                  <Calendar className="w-4 h-4 text-blue-500" />
-                  <span>Timeline: {jobData.timeline || "Not specified"}</span>
-                </li>
-                {jobData.startDate && (
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-3">
+                  Project Details
+                </h4>
+                <ul className="space-y-2 text-sm text-gray-600">
                   <li className="flex items-center space-x-2">
                     <Calendar className="w-4 h-4 text-blue-500" />
                     <span>
-                      Start: {new Date(jobData.startDate).toLocaleDateString()}
+                      Duration: {jobData.expectedDuration || "Not specified"}
                     </span>
                   </li>
-                )}
-                {jobData.deadline && (
-                  <li className="flex items-center space-x-2">
-                    <Calendar className="w-4 h-4 text-blue-500" />
-                    <span>
-                      Deadline:{" "}
-                      {new Date(jobData.deadline).toLocaleDateString()}
+                  {jobData.timeline.deadline && (
+                    <li className="flex items-center space-x-2">
+                      <Calendar className="w-4 h-4 text-blue-500" />
+                      <span>
+                        Deadline:{" "}
+                        {new Date(
+                          jobData.timeline.deadline
+                        ).toLocaleDateString()}
+                      </span>
+                    </li>
+                  )}
+                  {jobData.timeline.estimated_hours && (
+                    <li className="flex items-center space-x-2">
+                      <Clock className="w-4 h-4 text-blue-500" />
+                      <span>
+                        Estimated: {jobData.timeline.estimated_hours} hours
+                      </span>
+                    </li>
+                  )}
+                </ul>
+              </div>
+            </div>
+
+            {/* Skills Tags */}
+            {jobData.skills_required.length > 0 && (
+              <div className="mb-6">
+                <h4 className="font-semibold text-gray-900 mb-3">
+                  Required Skills
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {jobData.skills_required.map((skill, index) => (
+                    <span
+                      key={index}
+                      className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium"
+                    >
+                      {skill}
                     </span>
-                  </li>
-                )}
-              </ul>
-            </div>
-          </div>
-
-          {/* Skills Tags */}
-          {jobData.requiredSkills.length > 0 && (
-            <div className="mb-6">
-              <h4 className="font-semibold text-gray-900 mb-3">
-                Required Skills
-              </h4>
-              <div className="flex flex-wrap gap-2">
-                {jobData.requiredSkills.map((skill, index) => (
-                  <span
-                    key={index}
-                    className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium"
-                  >
-                    {skill}
-                  </span>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* Validation Checklist */}
-        <div className="bg-gray-50 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Publishing Checklist
-          </h3>
-          <div className="space-y-3">
-            {[
-              {
-                check: jobData.title.length >= 10,
-                text: "Job title is descriptive (10+ characters)",
-              },
-              { check: jobData.category, text: "Category is selected" },
-              {
-                check: jobData.description.length >= 100,
-                text: "Description is comprehensive (100+ characters)",
-              },
-              { check: jobData.specialty, text: "Specialty is specified" },
-              {
-                check: jobData.experienceLevel,
-                text: "Experience level is defined",
-              },
-              {
-                check: jobData.requiredSkills.length > 0,
-                text: "Required skills are listed",
-              },
-              {
-                check: jobData.budgetType && jobData.budgetAmount,
-                text: "Budget details are complete",
-              },
-              { check: jobData.timeline, text: "Timeline is specified" },
-            ].map((item, index) => (
-              <div key={index} className="flex items-center space-x-3">
-                {item.check ? (
-                  <CheckCircle className="w-5 h-5 text-green-500" />
-                ) : (
-                  <AlertCircle className="w-5 h-5 text-red-500" />
-                )}
-                <span
-                  className={`text-sm ${
-                    item.check ? "text-green-700" : "text-red-600"
-                  }`}
-                >
-                  {item.text}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Contact Information */}
-        <div className="bg-blue-50 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-blue-900 mb-4">
-            Contact Information
-          </h3>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-blue-800 mb-1">
-                Contact Email
-              </label>
-              <div className="flex">
-                <Mail className="w-5 h-5 text-blue-600 mt-2 mr-2" />
-                <input
-                  type="email"
-                  value={jobData.contactEmail}
-                  onChange={(e) =>
-                    handleInputChange("contactEmail", e.target.value)
-                  }
-                  className="flex-1 px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                  placeholder="your@email.com"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-blue-800 mb-1">
-                Contact Phone (Optional)
-              </label>
-              <div className="flex">
-                <Phone className="w-5 h-5 text-blue-600 mt-2 mr-2" />
-                <input
-                  type="tel"
-                  value={jobData.contactPhone}
-                  onChange={(e) =>
-                    handleInputChange("contactPhone", e.target.value)
-                  }
-                  className="flex-1 px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                  placeholder="+1 (555) 123-4567"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Final Actions */}
-        <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-          <div className="text-sm text-gray-600">
-            {lastSaved && <p>Last saved: {lastSaved.toLocaleTimeString()}</p>}
-            {hasUnsavedChanges && (
-              <p className="text-orange-600">You have unsaved changes</p>
             )}
           </div>
 
-          <div className="flex space-x-4">
-            <button
-              onClick={saveDraft}
-              disabled={saving}
-              className="flex items-center space-x-2 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-            >
-              <Save className="w-4 h-4" />
-              <span>{saving ? "Saving..." : "Save Draft"}</span>
-            </button>
+          {/* Validation Checklist */}
+          <div className="bg-gray-50 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Publishing Checklist
+            </h3>
+            <div className="space-y-3">
+              {[
+                {
+                  check: jobData.title.length >= 10,
+                  text: "Job title is descriptive (10+ characters)",
+                },
+                { check: jobData.category, text: "Category is selected" },
+                {
+                  check: jobData.description.length >= 50,
+                  text: "Description is comprehensive (50+ characters)",
+                },
+                { check: jobData.specialty, text: "Specialty is specified" },
+                {
+                  check: jobData.experience_required.level,
+                  text: "Experience level is defined",
+                },
+                {
+                  check: jobData.skills_required.length > 0,
+                  text: "Required skills are listed",
+                },
+                {
+                  check:
+                    jobData.budget.type &&
+                    (jobData.budget.type === "negotiable" ||
+                      jobData.budget.amount),
+                  text: "Budget details are complete",
+                },
+                {
+                  check: jobData.timeline.deadline,
+                  text: "Deadline is specified",
+                },
+              ].map((item, index) => (
+                <div key={index} className="flex items-center space-x-3">
+                  {item.check ? (
+                    <CheckCircle className="w-5 h-5 text-green-500" />
+                  ) : (
+                    <AlertCircle className="w-5 h-5 text-red-500" />
+                  )}
+                  <span
+                    className={`text-sm ${
+                      item.check ? "text-green-700" : "text-red-600"
+                    }`}
+                  >
+                    {item.text}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
 
-            <button
-              onClick={submitJob}
-              disabled={loading || !validateAllSteps()}
-              className="flex items-center space-x-2 px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-            >
-              {loading ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                  <span>Publishing...</span>
-                </>
-              ) : (
-                <>
-                  <Send className="w-4 h-4" />
-                  <span>{isEditing ? "Update Job" : "Publish Job"}</span>
-                </>
+          {/* Contact Information */}
+          <div className="bg-blue-50 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-blue-900 mb-4">
+              Contact Information
+            </h3>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-blue-800 mb-1">
+                  Contact Email
+                </label>
+                <div className="flex">
+                  <Mail className="w-5 h-5 text-blue-600 mt-2 mr-2" />
+                  <input
+                    type="email"
+                    value={jobData.contact_email}
+                    onChange={(e) =>
+                      handleInputChange("contact_email", e.target.value)
+                    }
+                    className="flex-1 px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    placeholder="your@email.com"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-blue-800 mb-1">
+                  Contact Phone (Optional)
+                </label>
+                <div className="flex">
+                  <Phone className="w-5 h-5 text-blue-600 mt-2 mr-2" />
+                  <input
+                    type="tel"
+                    value={jobData.contact_phone}
+                    onChange={(e) =>
+                      handleInputChange("contact_phone", e.target.value)
+                    }
+                    className="flex-1 px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    placeholder="+1 (555) 123-4567"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Final Actions */}
+          <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+            <div className="text-sm text-gray-600">
+              {lastSaved && <p>Last saved: {lastSaved.toLocaleTimeString()}</p>}
+              {hasUnsavedChanges && (
+                <p className="text-orange-600">You have unsaved changes</p>
               )}
-            </button>
+            </div>
+
+            <div className="flex space-x-4">
+              <button
+                type="button"
+                onClick={saveDraft}
+                disabled={saveDraftMutation.isLoading}
+                className="flex items-center space-x-2 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                <span>
+                  {saveDraftMutation.isLoading ? "Saving..." : "Save Draft"}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={submitJob}
+                disabled={
+                  !allValid ||
+                  createJobMutation.isLoading ||
+                  updateJobMutation.isLoading
+                }
+                className="flex items-center space-x-2 px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+              >
+                {createJobMutation.isLoading || updateJobMutation.isLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    <span>Publishing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    <span>{isEditing ? "Update Job" : "Publish Job"}</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
-
+    );
+  };
+  // --------------------------------------------------------------------------
+  // LOADING STATE
+  // --------------------------------------------------------------------------
+  if (loadingJob) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-primary-600 border-opacity-50 mx-auto mb-4" />
+          <p className="text-gray-600">Loading job data...</p>
+        </div>
+      </div>
+    );
+  }
+  // --------------------------------------------------------------------------
+  // PERMISSION CHECK
+  // --------------------------------------------------------------------------
+  if (!isSenior()) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+            Access Denied
+          </h2>
+          <p className="text-gray-600 mb-6">
+            Only senior doctors can post job opportunities. Please switch to a
+            senior account or contact support for assistance.
+          </p>
+          <button
+            onClick={() => navigate("/dashboard")}
+            className="btn-primary px-6 py-3 rounded-lg"
+          >
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+  // --------------------------------------------------------------------------
+  // RENDER
+  // --------------------------------------------------------------------------
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto p-6">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -1758,7 +1851,6 @@ const JobPosting = () => {
                 : "Find the perfect medical professional for your needs"}
             </p>
           </div>
-
           {/* Auto-save indicator */}
           {lastSaved && (
             <div className="text-right text-sm text-gray-500">
@@ -1770,28 +1862,13 @@ const JobPosting = () => {
           )}
         </div>
 
-        {/* Error/Success Messages */}
-        {error && (
-          <div className="bg-red-100 border-l-4 border-red-400 text-red-700 p-4 rounded-lg mb-6 flex items-center">
-            <AlertCircle className="w-5 h-5 mr-3" />
-            {error}
-          </div>
-        )}
-
-        {success && (
-          <div className="bg-green-100 border-l-4 border-green-400 text-green-700 p-4 rounded-lg mb-6 flex items-center">
-            <CheckCircle className="w-5 h-5 mr-3" />
-            {success}
-          </div>
-        )}
-
         {/* Loading Overlay */}
-        {loading && (
+        {(createJobMutation.isLoading || updateJobMutation.isLoading) && (
           <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
             <div className="bg-white rounded-lg p-8 flex items-center space-x-4">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               <span className="text-gray-700 font-medium">
-                Processing your job posting...
+                {isEditing ? "Updating job..." : "Publishing job..."}
               </span>
             </div>
           </div>
@@ -1812,6 +1889,7 @@ const JobPosting = () => {
         {currentStep < 5 && (
           <div className="flex justify-between mt-8">
             <button
+              type="button"
               onClick={prevStep}
               disabled={currentStep === 1}
               className="flex items-center space-x-2 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1822,15 +1900,19 @@ const JobPosting = () => {
 
             <div className="flex space-x-4">
               <button
+                type="button"
                 onClick={saveDraft}
-                disabled={saving}
+                disabled={saveDraftMutation.isLoading}
                 className="flex items-center space-x-2 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
               >
                 <Save className="w-4 h-4" />
-                <span>{saving ? "Saving..." : "Save Draft"}</span>
+                <span>
+                  {saveDraftMutation.isLoading ? "Saving..." : "Save Draft"}
+                </span>
               </button>
 
               <button
+                type="button"
                 onClick={nextStep}
                 className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
@@ -1844,5 +1926,7 @@ const JobPosting = () => {
     </div>
   );
 };
-
+// ============================================================================
+// EXPORT
+// ============================================================================
 export default JobPosting;

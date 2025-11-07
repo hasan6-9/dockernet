@@ -1,22 +1,48 @@
-import React, { useState, useEffect } from "react";
+// ============================================================================
+// IMPORTS
+// ============================================================================
+import React, { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
+import { authAPI, handleApiError } from "../api";
 
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
 const Register = () => {
+  // --------------------------------------------------------------------------
+  // HOOKS & STATE
+  // --------------------------------------------------------------------------
   const [searchParams] = useSearchParams();
-  const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState(() => {
-    // Try to load saved progress from localStorage
-    const savedData = localStorage.getItem("registration_progress");
-    if (savedData) {
-      try {
-        return JSON.parse(savedData);
-      } catch (e) {
-        console.error("Error parsing saved registration data:", e);
-      }
-    }
+  const navigate = useNavigate();
+  const { isAuthenticated, loading: authLoading } = useAuth();
 
-    return {
+  const [currentStep, setCurrentStep] = useState(1);
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [emailCheckStatus, setEmailCheckStatus] = useState({
+    checking: false,
+    available: null,
+    message: "",
+  });
+  const [emailCheckTimeout, setEmailCheckTimeout] = useState(null);
+
+  const totalSteps = 5;
+
+  // React Hook Form for each step
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    watch,
+    setValue,
+    trigger,
+    getValues,
+  } = useForm({
+    mode: "onBlur",
+    defaultValues: {
       // Basic Information
       firstName: "",
       lastName: "",
@@ -62,227 +88,283 @@ const Register = () => {
         allowDirectContact: true,
         showLastSeen: true,
       },
-    };
+    },
   });
 
-  const [showPassword, setShowPassword] = useState(false);
-  const [errors, setErrors] = useState({});
-  const [isLoading, setIsLoading] = useState(false);
+  // Watch form values
+  const watchRole = watch("role");
+  const watchPassword = watch("password");
+  const watchLanguages = watch("languages");
+  const watchSubspecialties = watch("subspecialties");
 
-  const { register, loading, error, isAuthenticated } = useAuth();
-  const navigate = useNavigate();
-
-  const totalSteps = 5;
-
-  // Save progress to localStorage whenever formData changes
-  useEffect(() => {
-    const dataToSave = { ...formData };
-    delete dataToSave.password;
-    delete dataToSave.confirmPassword;
-    localStorage.setItem("registration_progress", JSON.stringify(dataToSave));
-  }, [formData]);
-
+  // --------------------------------------------------------------------------
+  // EFFECTS
+  // --------------------------------------------------------------------------
   useEffect(() => {
     if (isAuthenticated) {
-      // Clear saved progress on successful registration
-      localStorage.removeItem("registration_progress");
       navigate("/dashboard");
     }
   }, [isAuthenticated, navigate]);
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
+  // --------------------------------------------------------------------------
+  // VALIDATION FUNCTIONS
+  // --------------------------------------------------------------------------
+  const validateStep = async (step) => {
+    let fieldsToValidate = [];
 
-    if (name.includes(".")) {
-      // Handle nested objects like location.city, medicalSchool.name
-      const [parent, child] = name.split(".");
-      setFormData((prev) => ({
-        ...prev,
-        [parent]: {
-          ...prev[parent],
-          [child]: value,
-        },
-      }));
-    } else if (name === "subspecialties") {
-      // Handle subspecialties array
-      const currentSubspecialties = formData.subspecialties || [];
-      if (checked) {
-        setFormData((prev) => ({
-          ...prev,
-          subspecialties: [...currentSubspecialties, value],
-        }));
-      } else {
-        setFormData((prev) => ({
-          ...prev,
-          subspecialties: currentSubspecialties.filter(
-            (spec) => spec !== value
-          ),
-        }));
-      }
-    } else if (name.startsWith("privacy.")) {
-      const field = name.split(".")[1];
-      setFormData((prev) => ({
-        ...prev,
-        privacy: {
-          ...prev.privacy,
-          [field]: type === "checkbox" ? checked : value,
-        },
-      }));
-    } else {
-      setFormData((prev) => ({
-        ...prev,
-        [name]: value,
-      }));
+    switch (step) {
+      case 1:
+        fieldsToValidate = [
+          "firstName",
+          "lastName",
+          "email",
+          "phone",
+          "password",
+          "confirmPassword",
+          "role",
+        ];
+        break;
+      case 2:
+        fieldsToValidate = [
+          "medicalLicenseNumber",
+          "licenseState",
+          "primarySpecialty",
+          "yearsOfExperience",
+        ];
+        break;
+      case 3:
+        fieldsToValidate = [
+          "medicalSchool.name",
+          "medicalSchool.graduationYear",
+        ];
+        break;
+      case 4:
+        fieldsToValidate = ["location.city", "location.state"];
+        break;
+      case 5:
+        // Optional fields, no validation needed
+        return true;
+      default:
+        return false;
     }
 
-    // Clear error for this field
-    if (errors[name]) {
-      setErrors((prev) => ({
-        ...prev,
-        [name]: "",
-      }));
-    }
+    const result = await trigger(fieldsToValidate);
+    return result;
   };
 
-  const handleLanguageChange = (index, field, value) => {
-    const updatedLanguages = [...formData.languages];
-    updatedLanguages[index] = { ...updatedLanguages[index], [field]: value };
-    setFormData((prev) => ({ ...prev, languages: updatedLanguages }));
-  };
+  // --------------------------------------------------------------------------
+  // EVENT HANDLERS
+  // --------------------------------------------------------------------------
+  const handleNext = async () => {
+    // STEP 1 SPECIFIC: Check email availability
+    if (currentStep === 1) {
+      const email = getValues("email");
 
-  const addLanguage = () => {
-    setFormData((prev) => ({
-      ...prev,
-      languages: [
-        ...prev.languages,
-        { language: "", proficiency: "conversational" },
-      ],
-    }));
-  };
+      // Check if email format is valid
+      const emailValid = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(email);
 
-  const removeLanguage = (index) => {
-    if (formData.languages.length > 1) {
-      const updatedLanguages = formData.languages.filter((_, i) => i !== index);
-      setFormData((prev) => ({ ...prev, languages: updatedLanguages }));
-    }
-  };
-
-  const validateStep = (step) => {
-    const newErrors = {};
-
-    if (step === 1) {
-      // Basic Information
-      if (!formData.firstName.trim())
-        newErrors.firstName = "First name is required";
-      if (!formData.lastName.trim())
-        newErrors.lastName = "Last name is required";
-      if (!formData.email.trim()) newErrors.email = "Email is required";
-      else if (!/\S+@\S+\.\S+/.test(formData.email))
-        newErrors.email = "Email is invalid";
-
-      if (!formData.phone.trim()) newErrors.phone = "Phone number is required";
-      else if (!/^\+?[\d\s\-\(\)]{10,}$/.test(formData.phone))
-        newErrors.phone = "Please enter a valid phone number";
-
-      // Password validation
-      if (!formData.password) {
-        newErrors.password = "Password is required";
-      } else if (formData.password.length < 8) {
-        newErrors.password = "Password must be at least 8 characters";
-      } else if (
-        !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/.test(
-          formData.password
-        )
-      ) {
-        newErrors.password =
-          "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&)";
+      if (!emailValid) {
+        toast.error("Please enter a valid email address");
+        return;
       }
 
-      if (formData.password !== formData.confirmPassword) {
-        newErrors.confirmPassword = "Passwords do not match";
+      // If we know email is not available
+      if (emailCheckStatus.available === false) {
+        toast.error("This email is already registered. Please login instead.", {
+          duration: 5000,
+          icon: "⚠️",
+        });
+        return;
       }
-    } else if (step === 2) {
-      // Medical Credentials
-      if (!formData.medicalLicenseNumber.trim())
-        newErrors.medicalLicenseNumber = "License number is required";
-      if (!formData.licenseState.trim())
-        newErrors.licenseState = "License state is required";
-      if (!formData.primarySpecialty.trim())
-        newErrors.primarySpecialty = "Primary specialty is required";
-      if (!formData.yearsOfExperience)
-        newErrors.yearsOfExperience = "Years of experience is required";
-    } else if (step === 3) {
-      // Medical School
-      if (!formData.medicalSchool.name.trim())
-        newErrors["medicalSchool.name"] = "Medical school name is required";
-      if (!formData.medicalSchool.graduationYear)
-        newErrors["medicalSchool.graduationYear"] =
-          "Graduation year is required";
-      else if (
-        formData.medicalSchool.graduationYear < 1950 ||
-        formData.medicalSchool.graduationYear > new Date().getFullYear()
-      )
-        newErrors["medicalSchool.graduationYear"] =
-          "Please enter a valid graduation year";
-    } else if (step === 4) {
-      // Location and Languages
-      if (!formData.location.city.trim())
-        newErrors["location.city"] = "City is required";
-      if (!formData.location.state.trim())
-        newErrors["location.state"] = "State is required";
 
-      // Validate languages
-      const hasEmptyLanguage = formData.languages.some(
-        (lang) => !lang.language.trim()
-      );
-      if (hasEmptyLanguage) {
-        newErrors.languages =
-          "Please fill in all language fields or remove empty ones";
+      // If we're still checking, wait
+      if (emailCheckStatus.checking) {
+        toast.loading("Checking email availability...", { duration: 1000 });
+        setTimeout(() => handleNext(), 1000);
+        return;
       }
-    } else if (step === 5) {
-      // Bio and preferences - optional but validate if provided
-      if (formData.bio && formData.bio.length > 2000) {
-        newErrors.bio = "Bio cannot exceed 2000 characters";
+
+      // If we haven't checked at all, check now
+      if (emailCheckStatus.available === null && email) {
+        setEmailCheckStatus({ checking: true, available: null, message: "" });
+        try {
+          const response = await authAPI.checkEmailAvailability(email);
+          if (!response.data.available) {
+            toast.error(
+              "This email is already registered. Please login instead.",
+              {
+                duration: 5000,
+                icon: "⚠️",
+              }
+            );
+            setEmailCheckStatus({
+              checking: false,
+              available: false,
+              message: response.data.message,
+            });
+            return;
+          }
+          setEmailCheckStatus({
+            checking: false,
+            available: true,
+            message: response.data.message,
+          });
+        } catch (error) {
+          console.error("Email check error:", error);
+        }
       }
     }
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+    // Original validation for all steps
+    const isValid = await validateStep(currentStep);
 
-  const handleNext = () => {
-    if (validateStep(currentStep)) {
+    if (isValid) {
       setCurrentStep(currentStep + 1);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      toast.error("Please fix the errors before continuing");
     }
   };
 
   const handlePrevious = () => {
     setCurrentStep(currentStep - 1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleLanguageChange = (index, field, value) => {
+    const currentLanguages = getValues("languages");
+    const updatedLanguages = [...currentLanguages];
+    updatedLanguages[index] = { ...updatedLanguages[index], [field]: value };
+    setValue("languages", updatedLanguages);
+  };
 
-    if (!validateStep(currentStep)) return;
+  const addLanguage = () => {
+    const currentLanguages = getValues("languages");
+    setValue("languages", [
+      ...currentLanguages,
+      { language: "", proficiency: "conversational" },
+    ]);
+  };
 
-    setIsLoading(true);
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (emailCheckTimeout) {
+        clearTimeout(emailCheckTimeout);
+      }
+    };
+  }, [emailCheckTimeout]);
 
-    // Prepare data for submission
-    const { confirmPassword, ...submitData } = formData;
-    submitData.yearsOfExperience = parseInt(submitData.yearsOfExperience);
-    submitData.medicalSchool.graduationYear = parseInt(
-      submitData.medicalSchool.graduationYear
-    );
+  // Check email availability
+  const checkEmailAvailability = useCallback(async (email) => {
+    setEmailCheckStatus({ checking: true, available: null, message: "" });
 
-    const result = await register(submitData);
-    if (result.success) {
-      localStorage.removeItem("registration_progress");
-      navigate("/dashboard");
+    try {
+      const response = await authAPI.checkEmailAvailability(email);
+
+      if (response.data.success) {
+        setEmailCheckStatus({
+          checking: false,
+          available: response.data.available,
+          message: response.data.message,
+        });
+      }
+    } catch (error) {
+      console.error("Email check error:", error);
+      setEmailCheckStatus({
+        checking: false,
+        available: null,
+        message: "",
+      });
     }
-    setIsLoading(false);
+  }, []);
+
+  // Handle email change with debouncing
+  const handleEmailChange = (e) => {
+    const email = e.target.value;
+
+    if (emailCheckTimeout) {
+      clearTimeout(emailCheckTimeout);
+    }
+
+    if (!email || !/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(email)) {
+      setEmailCheckStatus({ checking: false, available: null, message: "" });
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      checkEmailAvailability(email);
+    }, 800);
+
+    setEmailCheckTimeout(timeout);
   };
 
-  // Data arrays
+  const removeLanguage = (index) => {
+    const currentLanguages = getValues("languages");
+    if (currentLanguages.length > 1) {
+      const updatedLanguages = currentLanguages.filter((_, i) => i !== index);
+      setValue("languages", updatedLanguages);
+    }
+  };
+
+  const toggleSubspecialty = (subspecialty) => {
+    const current = getValues("subspecialties") || [];
+    if (current.includes(subspecialty)) {
+      setValue(
+        "subspecialties",
+        current.filter((s) => s !== subspecialty)
+      );
+    } else {
+      setValue("subspecialties", [...current, subspecialty]);
+    }
+  };
+
+  const onSubmit = async (data) => {
+    setIsSubmitting(true);
+
+    try {
+      // Prepare data for submission
+      const { confirmPassword, ...submitData } = data;
+
+      // Convert string numbers to integers
+      submitData.yearsOfExperience = parseInt(submitData.yearsOfExperience);
+      submitData.medicalSchool.graduationYear = parseInt(
+        submitData.medicalSchool.graduationYear
+      );
+
+      // Filter out empty languages
+      submitData.languages = submitData.languages.filter(
+        (lang) => lang.language.trim() !== ""
+      );
+
+      // Make API call
+      const response = await authAPI.register(submitData);
+
+      if (response.data.success) {
+        toast.success("Account created successfully! Redirecting...");
+        // Note: AuthContext will handle user state update via login
+        setTimeout(() => {
+          navigate("/dashboard");
+        }, 1000);
+      }
+    } catch (error) {
+      const errorInfo = handleApiError(error);
+      toast.error(errorInfo.message);
+
+      // Display validation errors if present
+      if (errorInfo.errors && Array.isArray(errorInfo.errors)) {
+        errorInfo.errors.forEach((err) => {
+          toast.error(`${err.field}: ${err.message}`);
+        });
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // DATA ARRAYS
+  // --------------------------------------------------------------------------
   const specialties = [
     "Anesthesiology",
     "Cardiology",
@@ -404,15 +486,9 @@ const Register = () => {
     "Other",
   ];
 
-  const timezones = [
-    "America/New_York",
-    "America/Chicago",
-    "America/Denver",
-    "America/Los_Angeles",
-    "America/Anchorage",
-    "Pacific/Honolulu",
-  ];
-
+  // --------------------------------------------------------------------------
+  // STEP CONTENT RENDERER
+  // --------------------------------------------------------------------------
   const getStepContent = () => {
     switch (currentStep) {
       case 1:
@@ -430,33 +506,31 @@ const Register = () => {
             {/* Role Selection */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-3">
-                I am a...
+                I am a... <span className="text-red-500">*</span>
               </label>
               <div className="grid grid-cols-1 gap-3">
                 <label
                   className={`relative flex items-center p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 ${
-                    formData.role === "junior"
-                      ? "border-green-400 bg-green-50 shadow-md"
+                    watchRole === "junior"
+                      ? "border-medical-500 bg-medical-50 shadow-md"
                       : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                   }`}
                 >
                   <input
                     type="radio"
-                    name="role"
                     value="junior"
-                    checked={formData.role === "junior"}
-                    onChange={handleChange}
+                    {...register("role", { required: "Role is required" })}
                     className="sr-only"
                   />
                   <div className="flex items-center space-x-3">
                     <div
                       className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                        formData.role === "junior"
-                          ? "border-green-500 bg-green-500"
+                        watchRole === "junior"
+                          ? "border-medical-500 bg-medical-500"
                           : "border-gray-300"
                       }`}
                     >
-                      {formData.role === "junior" && (
+                      {watchRole === "junior" && (
                         <div className="w-2 h-2 bg-white rounded-full"></div>
                       )}
                     </div>
@@ -476,28 +550,26 @@ const Register = () => {
 
                 <label
                   className={`relative flex items-center p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 ${
-                    formData.role === "senior"
-                      ? "border-blue-400 bg-blue-50 shadow-md"
+                    watchRole === "senior"
+                      ? "border-primary-500 bg-primary-50 shadow-md"
                       : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                   }`}
                 >
                   <input
                     type="radio"
-                    name="role"
                     value="senior"
-                    checked={formData.role === "senior"}
-                    onChange={handleChange}
+                    {...register("role", { required: "Role is required" })}
                     className="sr-only"
                   />
                   <div className="flex items-center space-x-3">
                     <div
                       className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                        formData.role === "senior"
-                          ? "border-blue-500 bg-blue-500"
+                        watchRole === "senior"
+                          ? "border-primary-500 bg-primary-500"
                           : "border-gray-300"
                       }`}
                     >
-                      {formData.role === "senior" && (
+                      {watchRole === "senior" && (
                         <div className="w-2 h-2 bg-white rounded-full"></div>
                       )}
                     </div>
@@ -515,6 +587,11 @@ const Register = () => {
                   </div>
                 </label>
               </div>
+              {errors.role && (
+                <p className="mt-1 text-sm text-red-600">
+                  {errors.role.message}
+                </p>
+              )}
             </div>
 
             {/* Name Fields */}
@@ -524,24 +601,43 @@ const Register = () => {
                   htmlFor="firstName"
                   className="block text-sm font-semibold text-gray-700 mb-2"
                 >
-                  First Name
+                  First Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="firstName"
-                  name="firstName"
                   type="text"
-                  value={formData.firstName}
-                  onChange={handleChange}
-                  className={`input-medical ${
+                  {...register("firstName", {
+                    required: "First name is required",
+                    minLength: {
+                      value: 2,
+                      message: "Minimum 2 characters required",
+                    },
+                    maxLength: {
+                      value: 50,
+                      message: "Maximum 50 characters allowed",
+                    },
+                  })}
+                  className={`input w-full ${
                     errors.firstName
-                      ? "border-red-400 focus:border-red-500"
+                      ? "border-red-300 focus:border-red-500"
                       : ""
                   }`}
                   placeholder="Enter your first name"
                 />
                 {errors.firstName && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {errors.firstName}
+                  <p className="mt-1 text-sm text-red-600 flex items-center">
+                    <svg
+                      className="w-4 h-4 mr-1"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {errors.firstName.message}
                   </p>
                 )}
               </div>
@@ -551,21 +647,42 @@ const Register = () => {
                   htmlFor="lastName"
                   className="block text-sm font-semibold text-gray-700 mb-2"
                 >
-                  Last Name
+                  Last Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="lastName"
-                  name="lastName"
                   type="text"
-                  value={formData.lastName}
-                  onChange={handleChange}
-                  className={`input-medical ${
-                    errors.lastName ? "border-red-400 focus:border-red-500" : ""
+                  {...register("lastName", {
+                    required: "Last name is required",
+                    minLength: {
+                      value: 2,
+                      message: "Minimum 2 characters required",
+                    },
+                    maxLength: {
+                      value: 50,
+                      message: "Maximum 50 characters allowed",
+                    },
+                  })}
+                  className={`input w-full ${
+                    errors.lastName ? "border-red-300 focus:border-red-500" : ""
                   }`}
                   placeholder="Enter your last name"
                 />
                 {errors.lastName && (
-                  <p className="mt-1 text-sm text-red-600">{errors.lastName}</p>
+                  <p className="mt-1 text-sm text-red-600 flex items-center">
+                    <svg
+                      className="w-4 h-4 mr-1"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {errors.lastName.message}
+                  </p>
                 )}
               </div>
             </div>
@@ -577,21 +694,168 @@ const Register = () => {
                   htmlFor="email"
                   className="block text-sm font-semibold text-gray-700 mb-2"
                 >
-                  Professional Email Address
+                  Professional Email <span className="text-red-500">*</span>
                 </label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className={`input-medical ${
-                    errors.email ? "border-red-400 focus:border-red-500" : ""
-                  }`}
-                  placeholder="doctor@medicalpractice.com"
-                />
+                <div className="relative">
+                  <input
+                    id="email"
+                    type="email"
+                    {...register("email", {
+                      required: "Email is required",
+                      pattern: {
+                        value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                        message: "Invalid email address",
+                      },
+                      onChange: handleEmailChange, // ADD THIS LINE
+                    })}
+                    className={`input w-full pr-10 ${
+                      errors.email
+                        ? "border-red-300 focus:border-red-500"
+                        : emailCheckStatus.available === true
+                        ? "border-green-300 focus:border-green-500"
+                        : emailCheckStatus.available === false
+                        ? "border-red-300 focus:border-red-500"
+                        : ""
+                    }`}
+                    placeholder="doctor@medicalpractice.com"
+                  />
+
+                  {/* Status Icons */}
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                    {emailCheckStatus.checking && (
+                      <svg
+                        className="animate-spin h-5 w-5 text-blue-500"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                    )}
+                    {!emailCheckStatus.checking &&
+                      emailCheckStatus.available === true && (
+                        <svg
+                          className="h-5 w-5 text-green-500"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      )}
+                    {!emailCheckStatus.checking &&
+                      emailCheckStatus.available === false && (
+                        <svg
+                          className="h-5 w-5 text-red-500"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      )}
+                  </div>
+                </div>
+
+                {/* Validation Messages */}
                 {errors.email && (
-                  <p className="mt-1 text-sm text-red-600">{errors.email}</p>
+                  <p className="mt-1 text-sm text-red-600 flex items-center">
+                    <svg
+                      className="w-4 h-4 mr-1"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {errors.email.message}
+                  </p>
+                )}
+
+                {!errors.email && emailCheckStatus.checking && (
+                  <p className="mt-1 text-sm text-blue-600 flex items-center">
+                    <svg
+                      className="animate-spin w-4 h-4 mr-1"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    Checking availability...
+                  </p>
+                )}
+
+                {!errors.email && emailCheckStatus.available === true && (
+                  <p className="mt-1 text-sm text-green-600 flex items-center">
+                    <svg
+                      className="w-4 h-4 mr-1"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    Email available! ✓
+                  </p>
+                )}
+
+                {!errors.email && emailCheckStatus.available === false && (
+                  <p className="mt-1 text-sm text-red-600 flex items-center">
+                    <svg
+                      className="w-4 h-4 mr-1"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    Email already registered.{" "}
+                    <Link
+                      to="/login"
+                      className="underline ml-1 hover:text-red-700"
+                    >
+                      Login instead?
+                    </Link>
+                  </p>
                 )}
               </div>
 
@@ -600,21 +864,38 @@ const Register = () => {
                   htmlFor="phone"
                   className="block text-sm font-semibold text-gray-700 mb-2"
                 >
-                  Phone Number
+                  Phone Number <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="phone"
-                  name="phone"
                   type="tel"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  className={`input-medical ${
-                    errors.phone ? "border-red-400 focus:border-red-500" : ""
+                  {...register("phone", {
+                    required: "Phone number is required",
+                    pattern: {
+                      value: /^\+?[\d\s\-\(\)]{10,}$/,
+                      message: "Please enter a valid phone number",
+                    },
+                  })}
+                  className={`input w-full ${
+                    errors.phone ? "border-red-300 focus:border-red-500" : ""
                   }`}
                   placeholder="+1 (555) 123-4567"
                 />
                 {errors.phone && (
-                  <p className="mt-1 text-sm text-red-600">{errors.phone}</p>
+                  <p className="mt-1 text-sm text-red-600 flex items-center">
+                    <svg
+                      className="w-4 h-4 mr-1"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {errors.phone.message}
+                  </p>
                 )}
               </div>
             </div>
@@ -626,18 +907,28 @@ const Register = () => {
                   htmlFor="password"
                   className="block text-sm font-semibold text-gray-700 mb-2"
                 >
-                  Password
+                  Password <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <input
                     id="password"
-                    name="password"
                     type={showPassword ? "text" : "password"}
-                    value={formData.password}
-                    onChange={handleChange}
-                    className={`input-medical pr-10 ${
+                    {...register("password", {
+                      required: "Password is required",
+                      minLength: {
+                        value: 6,
+                        message: "Password must be at least 6 characters",
+                      },
+                      pattern: {
+                        value:
+                          /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
+                        message:
+                          "Must contain uppercase, lowercase, number, and special character",
+                      },
+                    })}
+                    className={`input w-full pr-10 ${
                       errors.password
-                        ? "border-red-400 focus:border-red-500"
+                        ? "border-red-300 focus:border-red-500"
                         : ""
                     }`}
                     placeholder="Create a strong password"
@@ -646,10 +937,13 @@ const Register = () => {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
                   >
                     {showPassword ? (
                       <svg
-                        className="h-5 w-5 text-gray-400"
+                        className="h-5 w-5 text-gray-400 hover:text-gray-600"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -663,7 +957,7 @@ const Register = () => {
                       </svg>
                     ) : (
                       <svg
-                        className="h-5 w-5 text-gray-400"
+                        className="h-5 w-5 text-gray-400 hover:text-gray-600"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -685,7 +979,20 @@ const Register = () => {
                   </button>
                 </div>
                 {errors.password && (
-                  <p className="mt-1 text-sm text-red-600">{errors.password}</p>
+                  <p className="mt-1 text-sm text-red-600 flex items-center">
+                    <svg
+                      className="w-4 h-4 mr-1"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {errors.password.message}
+                  </p>
                 )}
               </div>
 
@@ -694,24 +1001,37 @@ const Register = () => {
                   htmlFor="confirmPassword"
                   className="block text-sm font-semibold text-gray-700 mb-2"
                 >
-                  Confirm Password
+                  Confirm Password <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="confirmPassword"
-                  name="confirmPassword"
                   type={showPassword ? "text" : "password"}
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  className={`input-medical ${
+                  {...register("confirmPassword", {
+                    required: "Please confirm your password",
+                    validate: (value) =>
+                      value === watchPassword || "Passwords do not match",
+                  })}
+                  className={`input w-full ${
                     errors.confirmPassword
-                      ? "border-red-400 focus:border-red-500"
+                      ? "border-red-300 focus:border-red-500"
                       : ""
                   }`}
                   placeholder="Confirm your password"
                 />
                 {errors.confirmPassword && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {errors.confirmPassword}
+                  <p className="mt-1 text-sm text-red-600 flex items-center">
+                    <svg
+                      className="w-4 h-4 mr-1"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {errors.confirmPassword.message}
                   </p>
                 )}
               </div>
@@ -738,24 +1058,43 @@ const Register = () => {
                   htmlFor="medicalLicenseNumber"
                   className="block text-sm font-semibold text-gray-700 mb-2"
                 >
-                  Medical License Number
+                  Medical License Number <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="medicalLicenseNumber"
-                  name="medicalLicenseNumber"
                   type="text"
-                  value={formData.medicalLicenseNumber}
-                  onChange={handleChange}
-                  className={`input-medical ${
+                  {...register("medicalLicenseNumber", {
+                    required: "License number is required",
+                    minLength: {
+                      value: 3,
+                      message: "Minimum 3 characters required",
+                    },
+                    maxLength: {
+                      value: 50,
+                      message: "Maximum 50 characters allowed",
+                    },
+                  })}
+                  className={`input w-full ${
                     errors.medicalLicenseNumber
-                      ? "border-red-400 focus:border-red-500"
+                      ? "border-red-300 focus:border-red-500"
                       : ""
                   }`}
                   placeholder="Enter your license number"
                 />
                 {errors.medicalLicenseNumber && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {errors.medicalLicenseNumber}
+                  <p className="mt-1 text-sm text-red-600 flex items-center">
+                    <svg
+                      className="w-4 h-4 mr-1"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {errors.medicalLicenseNumber.message}
                   </p>
                 )}
               </div>
@@ -765,16 +1104,16 @@ const Register = () => {
                   htmlFor="licenseState"
                   className="block text-sm font-semibold text-gray-700 mb-2"
                 >
-                  License State
+                  License State <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="licenseState"
-                  name="licenseState"
-                  value={formData.licenseState}
-                  onChange={handleChange}
-                  className={`input-medical ${
+                  {...register("licenseState", {
+                    required: "License state is required",
+                  })}
+                  className={`input w-full ${
                     errors.licenseState
-                      ? "border-red-400 focus:border-red-500"
+                      ? "border-red-300 focus:border-red-500"
                       : ""
                   }`}
                 >
@@ -786,8 +1125,19 @@ const Register = () => {
                   ))}
                 </select>
                 {errors.licenseState && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {errors.licenseState}
+                  <p className="mt-1 text-sm text-red-600 flex items-center">
+                    <svg
+                      className="w-4 h-4 mr-1"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {errors.licenseState.message}
                   </p>
                 )}
               </div>
@@ -799,16 +1149,17 @@ const Register = () => {
                 htmlFor="primarySpecialty"
                 className="block text-sm font-semibold text-gray-700 mb-2"
               >
-                Primary Medical Specialty
+                Primary Medical Specialty{" "}
+                <span className="text-red-500">*</span>
               </label>
               <select
                 id="primarySpecialty"
-                name="primarySpecialty"
-                value={formData.primarySpecialty}
-                onChange={handleChange}
-                className={`input-medical ${
+                {...register("primarySpecialty", {
+                  required: "Primary specialty is required",
+                })}
+                className={`input w-full ${
                   errors.primarySpecialty
-                    ? "border-red-400 focus:border-red-500"
+                    ? "border-red-300 focus:border-red-500"
                     : ""
                 }`}
               >
@@ -820,8 +1171,19 @@ const Register = () => {
                 ))}
               </select>
               {errors.primarySpecialty && (
-                <p className="mt-1 text-sm text-red-600">
-                  {errors.primarySpecialty}
+                <p className="mt-1 text-sm text-red-600 flex items-center">
+                  <svg
+                    className="w-4 h-4 mr-1"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  {errors.primarySpecialty.message}
                 </p>
               )}
             </div>
@@ -838,15 +1200,13 @@ const Register = () => {
                 {subspecialties.map((subspecialty) => (
                   <label
                     key={subspecialty}
-                    className="flex items-center space-x-2 text-sm"
+                    className="flex items-center space-x-2 text-sm cursor-pointer hover:bg-gray-50 p-1 rounded"
                   >
                     <input
                       type="checkbox"
-                      name="subspecialties"
-                      value={subspecialty}
-                      checked={formData.subspecialties.includes(subspecialty)}
-                      onChange={handleChange}
-                      className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                      checked={watchSubspecialties?.includes(subspecialty)}
+                      onChange={() => toggleSubspecialty(subspecialty)}
+                      className="rounded border-gray-300 text-medical-600 focus:ring-medical-500"
                     />
                     <span className="text-gray-700">{subspecialty}</span>
                   </label>
@@ -860,16 +1220,19 @@ const Register = () => {
                 htmlFor="yearsOfExperience"
                 className="block text-sm font-semibold text-gray-700 mb-2"
               >
-                Years of Medical Experience
+                Years of Medical Experience{" "}
+                <span className="text-red-500">*</span>
               </label>
               <select
                 id="yearsOfExperience"
-                name="yearsOfExperience"
-                value={formData.yearsOfExperience}
-                onChange={handleChange}
-                className={`input-medical ${
+                {...register("yearsOfExperience", {
+                  required: "Years of experience is required",
+                  validate: (value) =>
+                    value !== "" || "Please select your experience level",
+                })}
+                className={`input w-full ${
                   errors.yearsOfExperience
-                    ? "border-red-400 focus:border-red-500"
+                    ? "border-red-300 focus:border-red-500"
                     : ""
                 }`}
               >
@@ -883,8 +1246,19 @@ const Register = () => {
                 <option value="30">30+ years</option>
               </select>
               {errors.yearsOfExperience && (
-                <p className="mt-1 text-sm text-red-600">
-                  {errors.yearsOfExperience}
+                <p className="mt-1 text-sm text-red-600 flex items-center">
+                  <svg
+                    className="w-4 h-4 mr-1"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  {errors.yearsOfExperience.message}
                 </p>
               )}
             </div>
@@ -909,24 +1283,43 @@ const Register = () => {
                 htmlFor="medicalSchool.name"
                 className="block text-sm font-semibold text-gray-700 mb-2"
               >
-                Medical School Name
+                Medical School Name <span className="text-red-500">*</span>
               </label>
               <input
                 id="medicalSchool.name"
-                name="medicalSchool.name"
                 type="text"
-                value={formData.medicalSchool.name}
-                onChange={handleChange}
-                className={`input-medical ${
-                  errors["medicalSchool.name"]
-                    ? "border-red-400 focus:border-red-500"
+                {...register("medicalSchool.name", {
+                  required: "Medical school name is required",
+                  minLength: {
+                    value: 2,
+                    message: "Minimum 2 characters required",
+                  },
+                  maxLength: {
+                    value: 200,
+                    message: "Maximum 200 characters allowed",
+                  },
+                })}
+                className={`input w-full ${
+                  errors.medicalSchool?.name
+                    ? "border-red-300 focus:border-red-500"
                     : ""
                 }`}
                 placeholder="e.g., Harvard Medical School"
               />
-              {errors["medicalSchool.name"] && (
-                <p className="mt-1 text-sm text-red-600">
-                  {errors["medicalSchool.name"]}
+              {errors.medicalSchool?.name && (
+                <p className="mt-1 text-sm text-red-600 flex items-center">
+                  <svg
+                    className="w-4 h-4 mr-1"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  {errors.medicalSchool.name.message}
                 </p>
               )}
             </div>
@@ -938,16 +1331,24 @@ const Register = () => {
                   htmlFor="medicalSchool.graduationYear"
                   className="block text-sm font-semibold text-gray-700 mb-2"
                 >
-                  Graduation Year
+                  Graduation Year <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="medicalSchool.graduationYear"
-                  name="medicalSchool.graduationYear"
-                  value={formData.medicalSchool.graduationYear}
-                  onChange={handleChange}
-                  className={`input-medical ${
-                    errors["medicalSchool.graduationYear"]
-                      ? "border-red-400 focus:border-red-500"
+                  {...register("medicalSchool.graduationYear", {
+                    required: "Graduation year is required",
+                    validate: (value) => {
+                      const year = parseInt(value);
+                      const currentYear = new Date().getFullYear();
+                      if (year < 1950 || year > currentYear) {
+                        return `Please enter a year between 1950 and ${currentYear}`;
+                      }
+                      return true;
+                    },
+                  })}
+                  className={`input w-full ${
+                    errors.medicalSchool?.graduationYear
+                      ? "border-red-300 focus:border-red-500"
                       : ""
                   }`}
                 >
@@ -961,9 +1362,20 @@ const Register = () => {
                     </option>
                   ))}
                 </select>
-                {errors["medicalSchool.graduationYear"] && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {errors["medicalSchool.graduationYear"]}
+                {errors.medicalSchool?.graduationYear && (
+                  <p className="mt-1 text-sm text-red-600 flex items-center">
+                    <svg
+                      className="w-4 h-4 mr-1"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {errors.medicalSchool.graduationYear.message}
                   </p>
                 )}
               </div>
@@ -977,11 +1389,9 @@ const Register = () => {
                 </label>
                 <input
                   id="medicalSchool.location"
-                  name="medicalSchool.location"
                   type="text"
-                  value={formData.medicalSchool.location}
-                  onChange={handleChange}
-                  className="input-medical"
+                  {...register("medicalSchool.location")}
+                  className="input w-full"
                   placeholder="e.g., Boston, MA"
                 />
               </div>
@@ -1012,24 +1422,39 @@ const Register = () => {
                     htmlFor="location.city"
                     className="block text-sm font-semibold text-gray-700 mb-2"
                   >
-                    City
+                    City <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="location.city"
-                    name="location.city"
                     type="text"
-                    value={formData.location.city}
-                    onChange={handleChange}
-                    className={`input-medical ${
-                      errors["location.city"]
-                        ? "border-red-400 focus:border-red-500"
+                    {...register("location.city", {
+                      required: "City is required",
+                      maxLength: {
+                        value: 100,
+                        message: "Maximum 100 characters allowed",
+                      },
+                    })}
+                    className={`input w-full ${
+                      errors.location?.city
+                        ? "border-red-300 focus:border-red-500"
                         : ""
                     }`}
                     placeholder="e.g., New York"
                   />
-                  {errors["location.city"] && (
-                    <p className="mt-1 text-sm text-red-600">
-                      {errors["location.city"]}
+                  {errors.location?.city && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center">
+                      <svg
+                        className="w-4 h-4 mr-1"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      {errors.location.city.message}
                     </p>
                   )}
                 </div>
@@ -1039,16 +1464,16 @@ const Register = () => {
                     htmlFor="location.state"
                     className="block text-sm font-semibold text-gray-700 mb-2"
                   >
-                    State
+                    State <span className="text-red-500">*</span>
                   </label>
                   <select
                     id="location.state"
-                    name="location.state"
-                    value={formData.location.state}
-                    onChange={handleChange}
-                    className={`input-medical ${
-                      errors["location.state"]
-                        ? "border-red-400 focus:border-red-500"
+                    {...register("location.state", {
+                      required: "State is required",
+                    })}
+                    className={`input w-full ${
+                      errors.location?.state
+                        ? "border-red-300 focus:border-red-500"
                         : ""
                     }`}
                   >
@@ -1059,9 +1484,20 @@ const Register = () => {
                       </option>
                     ))}
                   </select>
-                  {errors["location.state"] && (
-                    <p className="mt-1 text-sm text-red-600">
-                      {errors["location.state"]}
+                  {errors.location?.state && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center">
+                      <svg
+                        className="w-4 h-4 mr-1"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      {errors.location.state.message}
                     </p>
                   )}
                 </div>
@@ -1077,11 +1513,9 @@ const Register = () => {
                   </label>
                   <input
                     id="location.country"
-                    name="location.country"
                     type="text"
-                    value={formData.location.country}
-                    onChange={handleChange}
-                    className="input-medical"
+                    {...register("location.country")}
+                    className="input w-full"
                     placeholder="United States"
                   />
                 </div>
@@ -1095,10 +1529,8 @@ const Register = () => {
                   </label>
                   <select
                     id="location.timezone"
-                    name="location.timezone"
-                    value={formData.location.timezone}
-                    onChange={handleChange}
-                    className="input-medical"
+                    {...register("location.timezone")}
+                    className="input w-full"
                   >
                     <option value="America/New_York">Eastern Time (ET)</option>
                     <option value="America/Chicago">Central Time (CT)</option>
@@ -1122,14 +1554,25 @@ const Register = () => {
                 <button
                   type="button"
                   onClick={addLanguage}
-                  className="text-sm text-green-600 hover:text-green-700 font-medium"
+                  className="text-sm text-medical-600 hover:text-medical-700 font-medium flex items-center"
                 >
-                  + Add Language
+                  <svg
+                    className="w-4 h-4 mr-1"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Add Language
                 </button>
               </div>
 
               <div className="space-y-3">
-                {formData.languages.map((lang, index) => (
+                {watchLanguages?.map((lang, index) => (
                   <div
                     key={index}
                     className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg"
@@ -1144,7 +1587,7 @@ const Register = () => {
                             e.target.value
                           )
                         }
-                        className="input-medical"
+                        className="input w-full"
                       >
                         <option value="">Select Language</option>
                         {languages.map((language) => (
@@ -1165,7 +1608,7 @@ const Register = () => {
                             e.target.value
                           )
                         }
-                        className="input-medical"
+                        className="input w-full"
                       >
                         <option value="basic">Basic</option>
                         <option value="conversational">Conversational</option>
@@ -1174,14 +1617,15 @@ const Register = () => {
                       </select>
                     </div>
 
-                    {formData.languages.length > 1 && (
+                    {watchLanguages.length > 1 && (
                       <button
                         type="button"
                         onClick={() => removeLanguage(index)}
                         className="text-red-500 hover:text-red-700 p-1"
+                        aria-label="Remove language"
                       >
                         <svg
-                          className="w-4 h-4"
+                          className="w-5 h-5"
                           fill="currentColor"
                           viewBox="0 0 20 20"
                         >
@@ -1196,15 +1640,12 @@ const Register = () => {
                   </div>
                 ))}
               </div>
-
-              {errors.languages && (
-                <p className="mt-1 text-sm text-red-600">{errors.languages}</p>
-              )}
             </div>
           </div>
         );
 
       case 5:
+        const formValues = getValues();
         return (
           <div className="space-y-6">
             <div className="text-center mb-6">
@@ -1212,7 +1653,7 @@ const Register = () => {
                 Professional Profile
               </h3>
               <p className="text-gray-600 text-sm">
-                Complete your professional profile and privacy settings
+                Complete your professional profile and review your information
               </p>
             </div>
 
@@ -1226,22 +1667,38 @@ const Register = () => {
               </label>
               <textarea
                 id="bio"
-                name="bio"
                 rows={5}
-                value={formData.bio}
-                onChange={handleChange}
-                className={`input-medical resize-none ${
-                  errors.bio ? "border-red-400 focus:border-red-500" : ""
+                {...register("bio", {
+                  maxLength: {
+                    value: 2000,
+                    message: "Bio cannot exceed 2000 characters",
+                  },
+                })}
+                className={`input w-full resize-none ${
+                  errors.bio ? "border-red-300 focus:border-red-500" : ""
                 }`}
                 placeholder="Write a brief professional bio highlighting your experience, expertise, and what makes you unique as a medical professional..."
                 maxLength={2000}
               />
               <div className="flex justify-between items-center mt-1">
                 {errors.bio && (
-                  <p className="text-sm text-red-600">{errors.bio}</p>
+                  <p className="text-sm text-red-600 flex items-center">
+                    <svg
+                      className="w-4 h-4 mr-1"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {errors.bio.message}
+                  </p>
                 )}
                 <p className="text-xs text-gray-500 ml-auto">
-                  {formData.bio.length}/2000 characters
+                  {watch("bio")?.length || 0}/2000 characters
                 </p>
               </div>
             </div>
@@ -1262,10 +1719,8 @@ const Register = () => {
                   </label>
                   <select
                     id="privacy.profileVisibility"
-                    name="privacy.profileVisibility"
-                    value={formData.privacy.profileVisibility}
-                    onChange={handleChange}
-                    className="input-medical"
+                    {...register("privacy.profileVisibility")}
+                    className="input w-full"
                   >
                     <option value="public">Public - Visible to everyone</option>
                     <option value="members_only">
@@ -1278,52 +1733,44 @@ const Register = () => {
                 </div>
 
                 <div className="space-y-3">
-                  <label className="flex items-center">
+                  <label className="flex items-center cursor-pointer">
                     <input
                       type="checkbox"
-                      name="privacy.showEmail"
-                      checked={formData.privacy.showEmail}
-                      onChange={handleChange}
-                      className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                      {...register("privacy.showEmail")}
+                      className="rounded border-gray-300 text-medical-600 focus:ring-medical-500"
                     />
                     <span className="ml-2 text-sm text-gray-700">
                       Show email address on profile
                     </span>
                   </label>
 
-                  <label className="flex items-center">
+                  <label className="flex items-center cursor-pointer">
                     <input
                       type="checkbox"
-                      name="privacy.showPhone"
-                      checked={formData.privacy.showPhone}
-                      onChange={handleChange}
-                      className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                      {...register("privacy.showPhone")}
+                      className="rounded border-gray-300 text-medical-600 focus:ring-medical-500"
                     />
                     <span className="ml-2 text-sm text-gray-700">
                       Show phone number on profile
                     </span>
                   </label>
 
-                  <label className="flex items-center">
+                  <label className="flex items-center cursor-pointer">
                     <input
                       type="checkbox"
-                      name="privacy.allowDirectContact"
-                      checked={formData.privacy.allowDirectContact}
-                      onChange={handleChange}
-                      className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                      {...register("privacy.allowDirectContact")}
+                      className="rounded border-gray-300 text-medical-600 focus:ring-medical-500"
                     />
                     <span className="ml-2 text-sm text-gray-700">
                       Allow other doctors to contact me directly
                     </span>
                   </label>
 
-                  <label className="flex items-center">
+                  <label className="flex items-center cursor-pointer">
                     <input
                       type="checkbox"
-                      name="privacy.showLastSeen"
-                      checked={formData.privacy.showLastSeen}
-                      onChange={handleChange}
-                      className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                      {...register("privacy.showLastSeen")}
+                      className="rounded border-gray-300 text-medical-600 focus:ring-medical-500"
                     />
                     <span className="ml-2 text-sm text-gray-700">
                       Show when I was last active
@@ -1351,40 +1798,41 @@ const Register = () => {
             </div>
 
             {/* Account Summary */}
-            <div className="bg-blue-50 rounded-xl p-6 border border-blue-200">
-              <h4 className="font-semibold text-blue-900 mb-3">
+            <div className="bg-primary-50 rounded-xl p-6 border border-primary-200">
+              <h4 className="font-semibold text-primary-900 mb-3">
                 Account Summary
               </h4>
-              <div className="text-sm text-blue-800 space-y-2">
+              <div className="text-sm text-primary-800 space-y-2">
                 <p>
                   <span className="font-medium">Name:</span> Dr.{" "}
-                  {formData.firstName} {formData.lastName}
+                  {formValues.firstName} {formValues.lastName}
                 </p>
                 <p>
-                  <span className="font-medium">Email:</span> {formData.email}
+                  <span className="font-medium">Email:</span> {formValues.email}
                 </p>
                 <p>
                   <span className="font-medium">Role:</span>{" "}
-                  {formData.role === "senior"
+                  {formValues.role === "senior"
                     ? "Senior Doctor"
                     : "Junior Doctor"}
                 </p>
                 <p>
                   <span className="font-medium">Specialty:</span>{" "}
-                  {formData.primarySpecialty}
+                  {formValues.primarySpecialty}
                 </p>
                 <p>
                   <span className="font-medium">Experience:</span>{" "}
-                  {formData.yearsOfExperience} years
+                  {formValues.yearsOfExperience}{" "}
+                  {formValues.yearsOfExperience === "1" ? "year" : "years"}
                 </p>
                 <p>
                   <span className="font-medium">Location:</span>{" "}
-                  {formData.location.city}, {formData.location.state}
+                  {formValues.location.city}, {formValues.location.state}
                 </p>
                 <p>
                   <span className="font-medium">Medical School:</span>{" "}
-                  {formData.medicalSchool.name} (
-                  {formData.medicalSchool.graduationYear})
+                  {formValues.medicalSchool.name} (
+                  {formValues.medicalSchool.graduationYear})
                 </p>
               </div>
             </div>
@@ -1396,119 +1844,41 @@ const Register = () => {
     }
   };
 
+  // --------------------------------------------------------------------------
+  // LOADING STATE
+  // --------------------------------------------------------------------------
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-medical-600 border-opacity-50" />
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // RENDER
+  // --------------------------------------------------------------------------
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
-      {/* Styles */}
-      <style jsx>{`
-        .pattern-trust {
-          background-image: radial-gradient(
-            circle at 1px 1px,
-            rgba(16, 185, 129, 0.1) 1px,
-            transparent 0
-          );
-          background-size: 20px 20px;
-        }
-        .card-glass {
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        .input-medical {
-          width: 100%;
-          padding: 0.875rem 1rem;
-          border: 2px solid #e5e7eb;
-          border-radius: 0.75rem;
-          background: rgba(255, 255, 255, 0.9);
-          transition: all 0.3s ease;
-          font-size: 0.875rem;
-        }
-        .input-medical:focus {
-          outline: none;
-          border-color: #10b981;
-          box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
-          background: white;
-        }
-        .btn-medical {
-          background: linear-gradient(135deg, #10b981, #059669);
-          color: white;
-          border: none;
-          padding: 0.75rem 1.5rem;
-          border-radius: 0.75rem;
-          font-weight: 600;
-          transition: all 0.3s ease;
-          box-shadow: 0 4px 14px 0 rgba(16, 185, 129, 0.25);
-        }
-        .btn-medical:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 25px 0 rgba(16, 185, 129, 0.35);
-        }
-        .btn-secondary {
-          background: transparent;
-          color: #6b7280;
-          border: 2px solid #e5e7eb;
-          padding: 0.75rem 1.5rem;
-          border-radius: 0.75rem;
-          font-weight: 600;
-          transition: all 0.3s ease;
-        }
-        .btn-secondary:hover {
-          border-color: #10b981;
-          color: #10b981;
-          background: rgba(16, 185, 129, 0.05);
-        }
-        .text-gradient-medical {
-          background: linear-gradient(135deg, #10b981, #059669);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-        }
-        .bg-gradient-medical {
-          background: linear-gradient(135deg, #10b981, #059669);
-        }
-        .animate-fade-in {
-          animation: fadeIn 0.6s ease-out;
-        }
-        .animate-slide-up {
-          animation: slideUp 0.6s ease-out;
-        }
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
-        }
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-      `}</style>
-
-      <div className="fixed inset-0 pattern-trust opacity-30 pointer-events-none"></div>
-
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-medical-50">
       {/* Header */}
       <nav className="relative bg-white/80 backdrop-blur-lg border-b border-white/20 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <Link to="/" className="flex items-center space-x-2">
-              <div className="w-10 h-10 bg-gradient-medical rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-gradient-to-br from-medical-600 to-medical-500 rounded-xl flex items-center justify-center shadow-lg">
                 <span className="text-white font-bold text-lg">D</span>
               </div>
-              <span className="text-2xl font-bold text-gradient-medical">
+              <span className="text-2xl font-bold bg-gradient-to-r from-medical-600 to-medical-500 bg-clip-text text-transparent">
                 Doconnect
               </span>
             </Link>
 
             <Link
               to="/login"
-              className="text-gray-600 hover:text-green-600 font-medium transition-colors"
+              className="text-gray-600 hover:text-medical-600 font-medium transition-colors"
             >
               Already have an account? Sign In
             </Link>
@@ -1529,14 +1899,14 @@ const Register = () => {
         </div>
 
         {/* Progress Indicator */}
-        <div className="mb-8 animate-slide-up">
+        <div className="mb-8">
           <div className="flex items-center justify-between max-w-2xl mx-auto">
             {[1, 2, 3, 4, 5].map((step) => (
               <div key={step} className="flex items-center">
                 <div
                   className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-all duration-300 ${
                     currentStep >= step
-                      ? "bg-green-500 text-white shadow-lg"
+                      ? "bg-medical-500 text-white shadow-lg"
                       : "bg-gray-200 text-gray-500"
                   }`}
                 >
@@ -1559,7 +1929,7 @@ const Register = () => {
                 {step < 5 && (
                   <div
                     className={`w-16 h-1 mx-2 transition-all duration-300 ${
-                      currentStep > step ? "bg-green-500" : "bg-gray-200"
+                      currentStep > step ? "bg-medical-500" : "bg-gray-200"
                     }`}
                   ></div>
                 )}
@@ -1576,33 +1946,13 @@ const Register = () => {
         </div>
 
         {/* Registration Form */}
-        <div className="card-glass rounded-2xl shadow-2xl animate-slide-up">
+        <div className="bg-white/95 backdrop-blur-lg rounded-2xl shadow-2xl border border-gray-100">
           <div className="p-8">
-            {/* Error Display */}
-            {error && (
-              <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">
-                <div className="flex items-center">
-                  <svg
-                    className="w-5 h-5 mr-2"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  {error}
-                </div>
-              </div>
-            )}
-
             {/* Step Content */}
             <form
               onSubmit={
                 currentStep === totalSteps
-                  ? handleSubmit
+                  ? handleSubmit(onSubmit)
                   : (e) => {
                       e.preventDefault();
                       handleNext();
@@ -1617,7 +1967,7 @@ const Register = () => {
                   <button
                     type="button"
                     onClick={handlePrevious}
-                    className="btn-secondary flex items-center space-x-2"
+                    className="btn-secondary flex items-center space-x-2 px-6 py-2.5 rounded-lg font-medium transition-all duration-200 hover:bg-gray-50"
                   >
                     <svg
                       className="w-4 h-4"
@@ -1641,7 +1991,7 @@ const Register = () => {
                 {currentStep < totalSteps ? (
                   <button
                     type="submit"
-                    className="btn-medical flex items-center space-x-2"
+                    className="btn-medical flex items-center space-x-2 px-6 py-2.5 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5"
                   >
                     <span>Next Step</span>
                     <svg
@@ -1661,14 +2011,14 @@ const Register = () => {
                 ) : (
                   <button
                     type="submit"
-                    disabled={loading || isLoading}
-                    className={`btn-medical flex items-center space-x-2 ${
-                      loading || isLoading
+                    disabled={isSubmitting}
+                    className={`btn-medical flex items-center space-x-2 px-6 py-2.5 rounded-lg font-medium shadow-lg transition-all duration-200 ${
+                      isSubmitting
                         ? "opacity-75 cursor-not-allowed"
-                        : ""
+                        : "hover:shadow-xl hover:-translate-y-0.5"
                     }`}
                   >
-                    {loading || isLoading ? (
+                    {isSubmitting ? (
                       <>
                         <svg
                           className="animate-spin w-4 h-4"
@@ -1717,11 +2067,11 @@ const Register = () => {
         </div>
 
         {/* Trust Indicators */}
-        <div className="mt-12 text-center animate-fade-in">
+        <div className="mt-12 text-center">
           <div className="flex justify-center items-center space-x-8 text-sm text-gray-500">
             <div className="flex items-center space-x-2">
               <svg
-                className="w-5 h-5 text-green-500"
+                className="w-5 h-5 text-medical-500"
                 fill="currentColor"
                 viewBox="0 0 20 20"
               >
@@ -1735,7 +2085,7 @@ const Register = () => {
             </div>
             <div className="flex items-center space-x-2">
               <svg
-                className="w-5 h-5 text-green-500"
+                className="w-5 h-5 text-medical-500"
                 fill="currentColor"
                 viewBox="0 0 20 20"
               >
@@ -1749,7 +2099,7 @@ const Register = () => {
             </div>
             <div className="flex items-center space-x-2">
               <svg
-                className="w-5 h-5 text-green-500"
+                className="w-5 h-5 text-medical-500"
                 fill="currentColor"
                 viewBox="0 0 20 20"
               >
@@ -1764,8 +2114,51 @@ const Register = () => {
           </div>
         </div>
       </main>
+
+      {/* Styles */}
+      <style jsx>{`
+        .animate-fade-in {
+          animation: fadeIn 0.6s ease-out;
+        }
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+        .btn-medical {
+          background: linear-gradient(135deg, #10b981, #059669);
+          color: white;
+        }
+        .btn-secondary {
+          background: white;
+          color: #6b7280;
+          border: 2px solid #e5e7eb;
+        }
+        .btn-secondary:hover {
+          border-color: #10b981;
+          color: #10b981;
+        }
+        .input {
+          width: 100%;
+          padding: 0.75rem 1rem;
+          border: 2px solid #e5e7eb;
+          border-radius: 0.5rem;
+          transition: all 0.2s;
+        }
+        .input:focus {
+          outline: none;
+          border-color: #10b981;
+          box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+        }
+      `}</style>
     </div>
   );
 };
 
+// ============================================================================
+// EXPORT
+// ============================================================================
 export default Register;

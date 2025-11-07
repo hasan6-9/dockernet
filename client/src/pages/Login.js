@@ -1,43 +1,93 @@
+// client/src/pages/Login.js - FIXED VERSION
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 
 const Login = () => {
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  });
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { login, loading, error, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const from = location.state?.from?.pathname || "/dashboard";
 
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm({
+    mode: "onBlur",
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
+
+  // Redirect if already authenticated
   useEffect(() => {
-    if (isAuthenticated) {
+    console.log("🔐 Auth Check:", { isAuthenticated, loading });
+    if (isAuthenticated && !loading) {
+      console.log("✅ User is authenticated, redirecting to:", from);
       navigate(from, { replace: true });
     }
-  }, [isAuthenticated, navigate, from]);
+  }, [isAuthenticated, loading, navigate, from]);
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
+  const onSubmit = async (data) => {
+    console.log("🚀 Login Form Submitted:", { email: data.email });
+    setIsSubmitting(true);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
-    const result = await login(formData);
-    if (result.success) {
-      navigate(from, { replace: true });
+    try {
+      // Call AuthContext login method
+      const result = await login({
+        email: data.email,
+        password: data.password,
+      });
+
+      console.log("📥 Login Result:", result);
+
+      if (result.success) {
+        toast.success("Login successful! Welcome back.", {
+          duration: 3000,
+          icon: "👋",
+        });
+
+        // Small delay to ensure state is updated
+        setTimeout(() => {
+          console.log("🔄 Navigating to:", from);
+          navigate(from, { replace: true });
+        }, 100);
+      } else {
+        toast.error(result.message || "Login failed. Please try again.");
+      }
+    } catch (error) {
+      console.error("❌ Login Error:", error);
+      const message =
+        error.response?.data?.message ||
+        error.message ||
+        "Login failed. Please try again.";
+      toast.error(message, {
+        duration: 5000,
+      });
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsLoading(false);
   };
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-medical-600 border-opacity-50 mx-auto" />
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-trust-50 via-white to-medical-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -71,24 +121,11 @@ const Login = () => {
 
         {/* Login Form */}
         <div className="card-glass animate-fade-in-up">
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            {error && (
-              <div className="bg-error-50 border border-error-200 text-error-700 px-4 py-3 rounded-xl flex items-center space-x-2 animate-scale-in">
-                <svg
-                  className="w-5 h-5 flex-shrink-0"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                <span className="text-sm font-medium">{error}</span>
-              </div>
-            )}
-
+          <form
+            className="space-y-6"
+            onSubmit={handleSubmit(onSubmit)}
+            noValidate
+          >
             <div className="space-y-5">
               {/* Email Field */}
               <div>
@@ -96,7 +133,7 @@ const Login = () => {
                   htmlFor="email"
                   className="block text-sm font-semibold text-trust-700 mb-2"
                 >
-                  Email Address
+                  Email Address <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -105,6 +142,7 @@ const Login = () => {
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
+                      aria-hidden="true"
                     >
                       <path
                         strokeLinecap="round"
@@ -116,16 +154,45 @@ const Login = () => {
                   </div>
                   <input
                     id="email"
-                    name="email"
                     type="email"
                     autoComplete="email"
-                    required
-                    value={formData.email}
-                    onChange={handleChange}
-                    className="input-medical pl-10"
+                    {...register("email", {
+                      required: "Email address is required",
+                      pattern: {
+                        value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                        message: "Please enter a valid email address",
+                      },
+                    })}
+                    className={`input-medical pl-10 ${
+                      errors.email
+                        ? "border-red-300 focus:border-red-500 focus:ring-red-500"
+                        : ""
+                    }`}
                     placeholder="doctor@example.com"
+                    aria-invalid={errors.email ? "true" : "false"}
+                    aria-describedby={errors.email ? "email-error" : undefined}
                   />
                 </div>
+                {errors.email && (
+                  <p
+                    id="email-error"
+                    className="mt-2 text-sm text-red-600 flex items-center"
+                    role="alert"
+                  >
+                    <svg
+                      className="w-4 h-4 mr-1"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {errors.email.message}
+                  </p>
+                )}
               </div>
 
               {/* Password Field */}
@@ -134,7 +201,7 @@ const Login = () => {
                   htmlFor="password"
                   className="block text-sm font-semibold text-trust-700 mb-2"
                 >
-                  Password
+                  Password <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -143,6 +210,7 @@ const Login = () => {
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
+                      aria-hidden="true"
                     >
                       <path
                         strokeLinecap="round"
@@ -154,19 +222,33 @@ const Login = () => {
                   </div>
                   <input
                     id="password"
-                    name="password"
                     type={showPassword ? "text" : "password"}
                     autoComplete="current-password"
-                    required
-                    value={formData.password}
-                    onChange={handleChange}
-                    className="input-medical pl-10 pr-10"
+                    {...register("password", {
+                      required: "Password is required",
+                      minLength: {
+                        value: 6,
+                        message: "Password must be at least 6 characters",
+                      },
+                    })}
+                    className={`input-medical pl-10 pr-10 ${
+                      errors.password
+                        ? "border-red-300 focus:border-red-500 focus:ring-red-500"
+                        : ""
+                    }`}
                     placeholder="Enter your password"
+                    aria-invalid={errors.password ? "true" : "false"}
+                    aria-describedby={
+                      errors.password ? "password-error" : undefined
+                    }
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center hover:opacity-75 transition-opacity"
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
                   >
                     {showPassword ? (
                       <svg
@@ -205,6 +287,26 @@ const Login = () => {
                     )}
                   </button>
                 </div>
+                {errors.password && (
+                  <p
+                    id="password-error"
+                    className="mt-2 text-sm text-red-600 flex items-center"
+                    role="alert"
+                  >
+                    <svg
+                      className="w-4 h-4 mr-1"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {errors.password.message}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -215,11 +317,11 @@ const Login = () => {
                   id="remember-me"
                   name="remember-me"
                   type="checkbox"
-                  className="h-4 w-4 text-medical-600 focus:ring-medical-500 border-trust-300 rounded"
+                  className="h-4 w-4 text-medical-600 focus:ring-medical-500 border-trust-300 rounded cursor-pointer"
                 />
                 <label
                   htmlFor="remember-me"
-                  className="ml-2 block text-sm text-trust-700"
+                  className="ml-2 block text-sm text-trust-700 cursor-pointer"
                 >
                   Remember me
                 </label>
@@ -239,12 +341,12 @@ const Login = () => {
             <div>
               <button
                 type="submit"
-                disabled={loading || isLoading}
+                disabled={isSubmitting}
                 className={`w-full btn-medical flex items-center justify-center space-x-2 ${
-                  loading || isLoading ? "opacity-75 cursor-not-allowed" : ""
+                  isSubmitting ? "opacity-75 cursor-not-allowed" : ""
                 }`}
               >
-                {loading || isLoading ? (
+                {isSubmitting ? (
                   <>
                     <svg
                       className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
@@ -384,4 +486,5 @@ const Login = () => {
     </div>
   );
 };
+
 export default Login;

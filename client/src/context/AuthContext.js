@@ -1,34 +1,51 @@
-import React, { createContext, useContext, useReducer, useEffect } from "react";
-import { authAPI } from "../api/auth";
+// client/src/context/AuthContext.js - Updated with Consolidated API
+import React, {
+  createContext,
+  useContext,
+  useReducer,
+  useEffect,
+  useCallback,
+} from "react";
+import {
+  authAPI,
+  profileAPI,
+  setAuthToken,
+  clearAuthToken,
+  getAuthToken,
+} from "../api";
 
 const AuthContext = createContext();
 
-// Enhanced initial state with new user model fields
+// ============================================================================
+// INITIAL STATE
+// ============================================================================
+
 const initialState = {
   user: null,
-  token: localStorage.getItem("token"),
+  token: null,
   isAuthenticated: false,
   loading: true,
   error: null,
 
-  // Account status tracking
+  // Account status
   accountStatus: null, // pending, active, inactive, suspended
   verificationStatus: {
     identity: "pending",
     medical_license: "pending",
     background_check: "pending",
-    overall: "unverified",
+    overall: "pending",
   },
 
   // Profile completion
   profileCompletion: {
     percentage: 0,
     completedSections: [],
+    missingSections: [],
     lastUpdated: null,
   },
 
   // User role and permissions
-  role: "junior", // senior, junior, admin
+  role: null, // senior, junior, admin
   permissions: {
     canAccessBasicFeatures: false,
     canAccessActiveFeatures: false,
@@ -37,7 +54,7 @@ const initialState = {
     canAccessAdminFeatures: false,
   },
 
-  // Profile analytics
+  // Analytics
   profileAnalytics: {
     views: { total: 0, thisMonth: 0, thisWeek: 0 },
     searchAppearances: { total: 0, thisMonth: 0 },
@@ -45,26 +62,61 @@ const initialState = {
   },
 };
 
-// Enhanced auth reducer with new actions
+// ============================================================================
+// PERMISSION CALCULATOR
+// ============================================================================
+
+const calculatePermissions = (user) => {
+  if (!user) return initialState.permissions;
+
+  const accountStatus = user.accountStatus;
+  const verificationStatus = user.verificationStatus || {};
+  const role = user.role;
+  const subscription = user.subscription || {};
+
+  return {
+    // Basic: authenticated (pending + active)
+    canAccessBasicFeatures: ["pending", "active"].includes(accountStatus),
+
+    // Active: active account only
+    canAccessActiveFeatures: accountStatus === "active",
+
+    // Professional: verified account
+    canAccessProfessionalFeatures:
+      accountStatus === "active" && verificationStatus.overall === "verified",
+
+    // Premium: active subscription
+    canAccessPremiumFeatures:
+      accountStatus === "active" &&
+      subscription.status === "active" &&
+      subscription.plan !== "free",
+
+    // Admin: admin role
+    canAccessAdminFeatures: role === "admin" && accountStatus === "active",
+  };
+};
+
+// ============================================================================
+// REDUCER
+// ============================================================================
+
 const authReducer = (state, action) => {
   switch (action.type) {
     case "AUTH_LOADING":
-      return {
-        ...state,
-        loading: true,
-        error: null,
-      };
+      return { ...state, loading: true, error: null };
 
     case "LOGIN_SUCCESS":
-    case "REGISTER_SUCCESS":
+    case "REGISTER_SUCCESS": {
       const userData = action.payload.user;
-      localStorage.setItem("token", action.payload.token);
-      localStorage.setItem("user", JSON.stringify(userData));
+      const token = action.payload.token;
+
+      // Set token in API client
+      setAuthToken(token);
 
       return {
         ...state,
         user: userData,
-        token: action.payload.token,
+        token,
         isAuthenticated: true,
         loading: false,
         error: null,
@@ -77,6 +129,7 @@ const authReducer = (state, action) => {
         permissions: calculatePermissions(userData),
         profileAnalytics: userData.analytics || state.profileAnalytics,
       };
+    }
 
     case "LOAD_USER_SUCCESS":
       return {
@@ -95,10 +148,8 @@ const authReducer = (state, action) => {
         profileAnalytics: action.payload.analytics || state.profileAnalytics,
       };
 
-    case "UPDATE_USER":
+    case "UPDATE_USER": {
       const updatedUser = action.payload;
-      localStorage.setItem("user", JSON.stringify(updatedUser));
-
       return {
         ...state,
         user: updatedUser,
@@ -111,6 +162,7 @@ const authReducer = (state, action) => {
         permissions: calculatePermissions(updatedUser),
         profileAnalytics: updatedUser.analytics || state.profileAnalytics,
       };
+    }
 
     case "UPDATE_PROFILE_COMPLETION":
       return {
@@ -121,12 +173,11 @@ const authReducer = (state, action) => {
         },
       };
 
-    case "UPDATE_VERIFICATION_STATUS":
+    case "UPDATE_VERIFICATION_STATUS": {
       const newVerificationStatus = {
         ...state.verificationStatus,
         ...action.payload,
       };
-
       return {
         ...state,
         verificationStatus: newVerificationStatus,
@@ -135,6 +186,7 @@ const authReducer = (state, action) => {
           verificationStatus: newVerificationStatus,
         }),
       };
+    }
 
     case "UPDATE_ACCOUNT_STATUS":
       return {
@@ -159,9 +211,7 @@ const authReducer = (state, action) => {
     case "LOGIN_FAIL":
     case "REGISTER_FAIL":
     case "LOGOUT":
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-
+      clearAuthToken();
       return {
         ...initialState,
         loading: false,
@@ -171,10 +221,7 @@ const authReducer = (state, action) => {
       };
 
     case "CLEAR_ERROR":
-      return {
-        ...state,
-        error: null,
-      };
+      return { ...state, error: null };
 
     case "REFRESH_PERMISSIONS":
       return {
@@ -187,68 +234,27 @@ const authReducer = (state, action) => {
   }
 };
 
-// Calculate user permissions based on account status, verification, and role
-const calculatePermissions = (user) => {
-  if (!user) return initialState.permissions;
-
-  const accountStatus = user.accountStatus;
-  const verificationStatus = user.verificationStatus || {};
-  const role = user.role;
-  const subscription = user.subscription || {};
-
-  return {
-    // Basic features: authenticated users (pending + active)
-    canAccessBasicFeatures:
-      accountStatus === "pending" || accountStatus === "active",
-
-    // Active features: active account status only
-    canAccessActiveFeatures: accountStatus === "active",
-
-    // Professional features: verified professional account
-    canAccessProfessionalFeatures:
-      accountStatus === "active" &&
-      (verificationStatus.overall === "verified" ||
-        verificationStatus.overall === "partial"),
-
-    // Premium features: active subscription
-    canAccessPremiumFeatures:
-      accountStatus === "active" &&
-      subscription.status === "active" &&
-      subscription.plan !== "free",
-
-    // Admin features: admin role
-    canAccessAdminFeatures: role === "admin" && accountStatus === "active",
-  };
-};
+// ============================================================================
+// PROVIDER COMPONENT
+// ============================================================================
 
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // Load user on app start
-  useEffect(() => {
-    if (state.token) {
-      loadUser();
-    } else {
-      dispatch({ type: "AUTH_ERROR", payload: null });
-    }
-  }, []);
+  // ============================================================================
+  // CORE AUTH METHODS
+  // ============================================================================
 
-  // Auto-refresh user data periodically for status updates
-  useEffect(() => {
-    if (state.isAuthenticated && state.token) {
-      const interval = setInterval(() => {
-        loadUser(true); // Silent refresh
-      }, 5 * 60 * 1000); // Every 5 minutes
-
-      return () => clearInterval(interval);
-    }
-  }, [state.isAuthenticated, state.token]);
-
-  // Load user from token
-  const loadUser = async (silent = false) => {
+  const loadUser = useCallback(async (silent = false) => {
     try {
       if (!silent) {
         dispatch({ type: "AUTH_LOADING" });
+      }
+
+      // Check if we have a token
+      if (!getAuthToken()) {
+        dispatch({ type: "AUTH_ERROR", payload: null });
+        return;
       }
 
       const response = await authAPI.getMe();
@@ -262,9 +268,8 @@ export const AuthProvider = ({ children }) => {
         });
       }
     }
-  };
+  }, []);
 
-  // Register user
   const register = async (userData) => {
     try {
       dispatch({ type: "AUTH_LOADING" });
@@ -282,11 +287,10 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       const message = error.response?.data?.message || "Registration failed";
       dispatch({ type: "REGISTER_FAIL", payload: message });
-      return { success: false, message };
+      return { success: false, message, errors: error.response?.data?.errors };
     }
   };
 
-  // Login user
   const login = async (credentials) => {
     try {
       dispatch({ type: "AUTH_LOADING" });
@@ -308,7 +312,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Logout user
   const logout = async () => {
     try {
       await authAPI.logout();
@@ -316,95 +319,95 @@ export const AuthProvider = ({ children }) => {
       console.error("Logout error:", error);
     } finally {
       dispatch({ type: "LOGOUT" });
+      clearAuthToken();
     }
   };
 
-  // Update user profile
   const updateProfile = async (userData) => {
     try {
-      const response = await authAPI.updateProfile(userData);
+      const response = await authAPI.updateDetails(userData);
       dispatch({ type: "UPDATE_USER", payload: response.data.data });
       return { success: true, message: response.data.message };
     } catch (error) {
       const message = error.response?.data?.message || "Update failed";
-      return { success: false, message };
+      return { success: false, message, errors: error.response?.data?.errors };
     }
   };
 
-  // Update specific profile sections
-  const updateProfileSection = async (section, data) => {
+  const updatePassword = async (passwordData) => {
     try {
-      const response = await authAPI.updateProfileSection(section, data);
-      dispatch({ type: "UPDATE_USER", payload: response.data.data });
+      const response = await authAPI.updatePassword(passwordData);
       return { success: true, message: response.data.message };
     } catch (error) {
-      const message = error.response?.data?.message || "Update failed";
-      return { success: false, message };
+      const message = error.response?.data?.message || "Password update failed";
+      return { success: false, message, errors: error.response?.data?.errors };
     }
   };
 
-  // Upload documents
-  const uploadDocument = async (documentData) => {
-    try {
-      const response = await authAPI.uploadDocument(documentData);
-      dispatch({ type: "UPDATE_USER", payload: response.data.data });
-      return { success: true, message: response.data.message };
-    } catch (error) {
-      const message = error.response?.data?.message || "Upload failed";
-      return { success: false, message };
-    }
-  };
+  // ============================================================================
+  // PROFILE MANAGEMENT METHODS
+  // ============================================================================
 
-  // Update profile photo
-  const updateProfilePhoto = async (photoData) => {
+  const uploadProfilePhoto = async (photoFile, onProgress) => {
     try {
-      const response = await authAPI.updateProfilePhoto(photoData);
+      const response = await profileAPI.uploadPhoto(photoFile, onProgress);
       dispatch({ type: "UPDATE_USER", payload: response.data.data });
-      return { success: true, message: response.data.message };
+      return { success: true, message: "Photo uploaded successfully" };
     } catch (error) {
       const message = error.response?.data?.message || "Photo upload failed";
       return { success: false, message };
     }
   };
 
-  // Track profile completion
+  const uploadDocuments = async (files, documentTypes, onProgress) => {
+    try {
+      const response = await profileAPI.uploadDocuments(
+        files,
+        documentTypes,
+        onProgress
+      );
+      dispatch({ type: "UPDATE_USER", payload: response.data.data });
+      return { success: true, message: "Documents uploaded successfully" };
+    } catch (error) {
+      const message = error.response?.data?.message || "Document upload failed";
+      return { success: false, message };
+    }
+  };
+
+  const updateBasicProfile = async (profileData) => {
+    try {
+      const response = await profileAPI.updateBasic(profileData);
+      dispatch({ type: "UPDATE_USER", payload: response.data.data });
+      return { success: true, message: "Profile updated successfully" };
+    } catch (error) {
+      const message = error.response?.data?.message || "Update failed";
+      return { success: false, message };
+    }
+  };
+
+  // ============================================================================
+  // STATUS UPDATE METHODS
+  // ============================================================================
+
   const updateProfileCompletion = (completionData) => {
     dispatch({ type: "UPDATE_PROFILE_COMPLETION", payload: completionData });
   };
 
-  // Update verification status (typically called after document review)
   const updateVerificationStatus = (statusUpdates) => {
     dispatch({ type: "UPDATE_VERIFICATION_STATUS", payload: statusUpdates });
   };
 
-  // Update account status
   const updateAccountStatus = (status) => {
     dispatch({ type: "UPDATE_ACCOUNT_STATUS", payload: status });
   };
 
-  // Track profile analytics
-  const trackProfileView = async (viewerId = null) => {
-    try {
-      await authAPI.trackProfileView(viewerId);
-      // Update local analytics
-      dispatch({
-        type: "UPDATE_ANALYTICS",
-        payload: {
-          views: {
-            ...state.profileAnalytics.views,
-            total: state.profileAnalytics.views.total + 1,
-          },
-        },
-      });
-    } catch (error) {
-      console.error("Error tracking profile view:", error);
-    }
-  };
+  // ============================================================================
+  // ANALYTICS METHODS
+  // ============================================================================
 
-  // Get profile analytics
   const getProfileAnalytics = async () => {
     try {
-      const response = await authAPI.getProfileAnalytics();
+      const response = await profileAPI.getAnalytics();
       dispatch({ type: "UPDATE_ANALYTICS", payload: response.data.data });
       return response.data.data;
     } catch (error) {
@@ -413,35 +416,38 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Permission check helpers
+  // ============================================================================
+  // PERMISSION HELPERS
+  // ============================================================================
+
   const hasPermission = (permission) => {
     return state.permissions[permission] || false;
   };
 
   const canAccessRoute = (routeLevel) => {
-    switch (routeLevel) {
-      case "basic":
-        return hasPermission("canAccessBasicFeatures");
-      case "active":
-        return hasPermission("canAccessActiveFeatures");
-      case "professional":
-        return hasPermission("canAccessProfessionalFeatures");
-      case "premium":
-        return hasPermission("canAccessPremiumFeatures");
-      case "admin":
-        return hasPermission("canAccessAdminFeatures");
-      default:
-        return false;
-    }
+    const levelMap = {
+      basic: "canAccessBasicFeatures",
+      active: "canAccessActiveFeatures",
+      professional: "canAccessProfessionalFeatures",
+      premium: "canAccessPremiumFeatures",
+      admin: "canAccessAdminFeatures",
+    };
+    return hasPermission(levelMap[routeLevel] || "canAccessBasicFeatures");
   };
 
-  // Account status helpers
+  // ============================================================================
+  // ACCOUNT STATUS HELPERS
+  // ============================================================================
+
   const isAccountPending = () => state.accountStatus === "pending";
   const isAccountActive = () => state.accountStatus === "active";
   const isAccountInactive = () => state.accountStatus === "inactive";
   const isAccountSuspended = () => state.accountStatus === "suspended";
 
-  // Verification status helpers
+  // ============================================================================
+  // VERIFICATION HELPERS
+  // ============================================================================
+
   const isIdentityVerified = () =>
     state.verificationStatus.identity === "verified";
   const isMedicalLicenseVerified = () =>
@@ -452,41 +458,75 @@ export const AuthProvider = ({ children }) => {
   const isPartiallyVerified = () =>
     state.verificationStatus.overall === "partial";
 
-  // Profile completion helpers
+  // ============================================================================
+  // PROFILE COMPLETION HELPERS
+  // ============================================================================
+
   const getProfileCompletionPercentage = () =>
     state.profileCompletion.percentage;
   const isProfileComplete = () => state.profileCompletion.percentage >= 80;
-  const getMissingProfileSections = () => {
-    const allSections = [
-      "basic_info",
-      "medical_info",
-      "profile_photo",
-      "bio",
-      "experience",
-      "skills",
-      "certifications",
-      "documents",
-      "availability",
-    ];
-    return allSections.filter(
-      (section) => !state.profileCompletion.completedSections.includes(section)
-    );
-  };
+  const getMissingProfileSections = () =>
+    state.profileCompletion.missingSections || [];
 
-  // Role helpers
+  // ============================================================================
+  // ROLE HELPERS
+  // ============================================================================
+
   const isAdmin = () => state.role === "admin";
   const isSenior = () => state.role === "senior";
   const isJunior = () => state.role === "junior";
 
-  // Clear errors
+  // ============================================================================
+  // UTILITY METHODS
+  // ============================================================================
+
   const clearError = () => {
     dispatch({ type: "CLEAR_ERROR" });
   };
 
-  // Refresh permissions (useful after profile updates)
   const refreshPermissions = () => {
     dispatch({ type: "REFRESH_PERMISSIONS" });
   };
+
+  // ============================================================================
+  // EFFECTS
+  // ============================================================================
+
+  // Load user on app start
+  useEffect(() => {
+    const token = getAuthToken();
+    if (token) {
+      loadUser();
+    } else {
+      dispatch({ type: "AUTH_ERROR", payload: null });
+    }
+  }, [loadUser]);
+
+  // Listen for unauthorized events
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      dispatch({ type: "LOGOUT" });
+    };
+
+    window.addEventListener("auth:unauthorized", handleUnauthorized);
+    return () =>
+      window.removeEventListener("auth:unauthorized", handleUnauthorized);
+  }, []);
+
+  // Auto-refresh user data periodically
+  useEffect(() => {
+    if (state.isAuthenticated && getAuthToken()) {
+      const interval = setInterval(() => {
+        loadUser(true); // Silent refresh
+      }, 5 * 60 * 1000); // Every 5 minutes
+
+      return () => clearInterval(interval);
+    }
+  }, [state.isAuthenticated, loadUser]);
+
+  // ============================================================================
+  // CONTEXT VALUE
+  // ============================================================================
 
   const value = {
     // State
@@ -498,19 +538,19 @@ export const AuthProvider = ({ children }) => {
     logout,
     loadUser,
     updateProfile,
-    updateProfileSection,
-    uploadDocument,
-    updateProfilePhoto,
+    updatePassword,
     clearError,
 
     // Profile management
+    uploadProfilePhoto,
+    uploadDocuments,
+    updateBasicProfile,
     updateProfileCompletion,
     updateVerificationStatus,
     updateAccountStatus,
     refreshPermissions,
 
     // Analytics
-    trackProfileView,
     getProfileAnalytics,
 
     // Permission helpers
@@ -544,6 +584,10 @@ export const AuthProvider = ({ children }) => {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
+// ============================================================================
+// CUSTOM HOOK
+// ============================================================================
+
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -552,19 +596,58 @@ export const useAuth = () => {
   return context;
 };
 
-// Higher-order component for route protection
+// ============================================================================
+// HOC FOR ROUTE PROTECTION
+// ============================================================================
+
 export const withAuth = (WrappedComponent, requiredPermission) => {
   return (props) => {
     const auth = useAuth();
 
     if (!auth.isAuthenticated) {
-      return <div>Please log in to access this page.</div>;
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+              Authentication Required
+            </h2>
+            <p className="text-gray-600 mb-4">
+              Please log in to access this page.
+            </p>
+            <a
+              href="/login"
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Go to Login
+            </a>
+          </div>
+        </div>
+      );
     }
 
     if (requiredPermission && !auth.canAccessRoute(requiredPermission)) {
-      return <div>You don't have permission to access this page.</div>;
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+              Access Denied
+            </h2>
+            <p className="text-gray-600 mb-4">
+              You don't have permission to access this page.
+            </p>
+            <a
+              href="/dashboard"
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Go to Dashboard
+            </a>
+          </div>
+        </div>
+      );
     }
 
     return <WrappedComponent {...props} />;
   };
 };
+
+export default AuthContext;

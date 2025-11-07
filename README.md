@@ -540,8 +540,7 @@ doconnect/
 │   │   └── index.html                  # HTML template
 │   ├── 📁 src/
 │   │   ├── 📁 api/
-│   │   │   ├── auth.js                 # ✅ Authentication API services
-│   │   │   ├── jobs.js                 # ✅ Job & Application API services
+│   │   │   ├── index.js                # ✅ Unified API service for all endpoints
 │   │   ├── 📁 assets/                  # Images, icons, static files
 │   │   ├── 📁 components/
 │   │   │   ├── ProtectedRoute.js       # ✅ Multi-level route protection

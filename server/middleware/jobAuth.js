@@ -251,7 +251,7 @@ exports.canApplyToSpecificJob = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: "You are not eligible to apply to this job",
-        reasons: eligibility.reasons,
+        reasons: eligibility.reasons || ["Requirements not met"],
       });
     }
 

@@ -1,17 +1,51 @@
-// server/controllers/adminController.js - Admin Profile Verification System
+// server/controllers/adminController.js - COMPLETE FIXED VERSION
 const User = require("../models/User");
 const { validationResult } = require("express-validator");
+const mongoose = require("mongoose");
+
+// ✅ ADD: ObjectId validation helper
+const isValidObjectId = (id) => {
+  return mongoose.Types.ObjectId.isValid(id);
+};
 
 // @desc    Get all profiles pending verification
 // @route   GET /api/admin/verification/pending
 // @access  Private/Admin
 exports.getPendingVerifications = async (req, res) => {
   try {
-    const {
-      type = "all", // 'all', 'identity', 'medical_license', 'background_check'
-      page = 1,
-      limit = 20,
-    } = req.query;
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: errors.array(),
+      });
+    }
+
+    const { type = "all", page = 1, limit = 20 } = req.query;
+
+    // Validate type parameter
+    const validTypes = [
+      "all",
+      "identity",
+      "medical_license",
+      "background_check",
+    ];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid verification type",
+        errors: [
+          {
+            type: "field",
+            value: type,
+            msg: "Type must be one of: all, identity, medical_license, background_check",
+            path: "type",
+            location: "query",
+          },
+        ],
+      });
+    }
 
     let query = { accountStatus: { $in: ["active", "pending"] } };
 
@@ -30,7 +64,7 @@ exports.getPendingVerifications = async (req, res) => {
 
     const profiles = await User.find(query)
       .select(
-        "firstName lastName email profilePhoto verificationStatus documents createdAt primarySpecialty medicalLicenseNumber licenseState"
+        "firstName lastName email profilePhoto verificationStatus documents createdAt primarySpecialty medicalLicenseNumber licenseState yearsOfExperience medicalSchool accountStatus role"
       )
       .populate("documents")
       .sort({ createdAt: -1 })
@@ -64,6 +98,14 @@ exports.getPendingVerifications = async (req, res) => {
 exports.getProfileForVerification = async (req, res) => {
   try {
     const { userId } = req.params;
+
+    // ✅ FIX: Validate ObjectId FIRST
+    if (!isValidObjectId(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
 
     const profile = await User.findById(userId)
       .select("-password")
@@ -113,6 +155,15 @@ exports.verifyIdentity = async (req, res) => {
     }
 
     const { userId } = req.params;
+
+    // ✅ FIX: Validate ObjectId FIRST
+    if (!isValidObjectId(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
     const { status, notes, documentIds } = req.body;
 
     const user = await User.findById(userId);
@@ -144,19 +195,7 @@ exports.verifyIdentity = async (req, res) => {
     // Update overall verification status
     user.updateVerificationStatus();
 
-    // Add verification note/history (future enhancement)
-    // user.verificationHistory.push({
-    //   type: 'identity',
-    //   status,
-    //   verifiedBy: req.user.id,
-    //   notes,
-    //   verifiedAt: new Date()
-    // });
-
     await user.save();
-
-    // Send notification to user (future enhancement)
-    // await sendVerificationNotification(user, 'identity', status);
 
     res.status(200).json({
       success: true,
@@ -190,6 +229,15 @@ exports.verifyMedicalLicense = async (req, res) => {
     }
 
     const { userId } = req.params;
+
+    // ✅ FIX: Validate ObjectId FIRST
+    if (!isValidObjectId(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
     const { status, notes, licenseVerified, documentIds } = req.body;
 
     const user = await User.findById(userId);
@@ -255,6 +303,15 @@ exports.verifyBackgroundCheck = async (req, res) => {
     }
 
     const { userId } = req.params;
+
+    // ✅ FIX: Validate ObjectId FIRST
+    if (!isValidObjectId(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
     const { status, notes, backgroundCheckPassed } = req.body;
 
     const user = await User.findById(userId);
@@ -313,6 +370,16 @@ exports.bulkVerification = async (req, res) => {
       });
     }
 
+    // ✅ FIX: Validate all ObjectIds
+    const invalidIds = userIds.filter((id) => !isValidObjectId(id));
+    if (invalidIds.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+        invalidIds: invalidIds,
+      });
+    }
+
     const updateQuery = {};
     updateQuery[`verificationStatus.${verificationType}`] = status;
 
@@ -353,6 +420,16 @@ exports.bulkVerification = async (req, res) => {
 exports.getVerificationStats = async (req, res) => {
   try {
     const { timeframe = "30d" } = req.query;
+
+    // ✅ FIX: Validate timeframe parameter
+    const validTimeframes = ["7d", "30d", "90d", "all"];
+    if (!validTimeframes.includes(timeframe)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid timeframe",
+        validTimeframes: validTimeframes,
+      });
+    }
 
     let dateFilter = {};
     if (timeframe === "7d") {
@@ -582,7 +659,7 @@ const calculateRiskFactors = async (profile) => {
   const riskFactors = [];
 
   // Check for incomplete profile
-  if (profile.profileCompletion.percentage < 50) {
+  if (profile.profileCompletion?.percentage < 50) {
     riskFactors.push({
       type: "incomplete_profile",
       severity: "medium",
@@ -628,7 +705,7 @@ const generateVerificationRecommendations = (profile) => {
   const recommendations = [];
 
   // Document-based recommendations
-  const licenseDoc = profile.documents.find(
+  const licenseDoc = profile.documents?.find(
     (doc) => doc.type === "medical_license"
   );
   if (!licenseDoc) {
@@ -639,13 +716,13 @@ const generateVerificationRecommendations = (profile) => {
     );
   }
 
-  const idDoc = profile.documents.find((doc) => doc.type === "identification");
+  const idDoc = profile.documents?.find((doc) => doc.type === "identification");
   if (!idDoc) {
     recommendations.push("Request government-issued identification");
   }
 
   // Profile completeness recommendations
-  if (profile.profileCompletion.percentage < 70) {
+  if (profile.profileCompletion?.percentage < 70) {
     recommendations.push("Encourage profile completion before verification");
   }
 

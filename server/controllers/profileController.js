@@ -67,10 +67,8 @@ const uploadToCloudinary = async (buffer, options) => {
 // @access  Private
 exports.getMyProfile = async (req, res) => {
   try {
-    console.log(
-      "getMyProfile called - req.user:",
-      req.user ? req.user._id : "No user"
-    );
+    console.log("=== getMyProfile called ===");
+    console.log("req.user:", req.user ? req.user._id : "No user");
 
     const user = await User.findById(req.user.id)
       .populate("reviews.reviewer", "firstName lastName profilePhoto")
@@ -83,6 +81,34 @@ exports.getMyProfile = async (req, res) => {
         success: false,
         message: "Profile not found",
       });
+    }
+
+    // Calculate and attach profile completion
+    console.log("=== Before calculation ===");
+    console.log(
+      "Old profileCompletion:",
+      JSON.stringify(user.profileCompletion, null, 2)
+    );
+
+    try {
+      const profileCompletion = user.calculateProfileCompletion
+        ? user.calculateProfileCompletion()
+        : null;
+
+      console.log("=== Calculated profileCompletion ===");
+      console.log(JSON.stringify(profileCompletion, null, 2));
+
+      if (profileCompletion) {
+        user.profileCompletion = profileCompletion;
+        await user.save();
+        console.log("=== After save ===");
+        console.log(
+          "New profileCompletion:",
+          JSON.stringify(user.profileCompletion, null, 2)
+        );
+      }
+    } catch (err) {
+      console.error("Failed to calculate profileCompletion:", err);
     }
 
     res.status(200).json({
