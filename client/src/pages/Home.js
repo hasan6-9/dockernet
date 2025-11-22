@@ -11,7 +11,7 @@ const Home = () => {
       name: "Dr. Sarah Chen",
       role: "Senior Cardiologist",
       content:
-        "Dockernet has transformed how I manage my practice. The enhanced profiles and advanced search make finding qualified junior doctors effortless.",
+        "Docconnect has transformed how I manage my practice. The enhanced profiles and advanced search make finding qualified junior doctors effortless.",
       avatar: "SC",
     },
     {
@@ -106,7 +106,7 @@ const Home = () => {
                 <span className="text-white font-bold text-lg">D</span>
               </div>
               <span className="text-2xl font-bold text-gradient-medical">
-                Dockernet
+                Docconnect
               </span>
             </div>
 
@@ -436,7 +436,7 @@ const Home = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-trust-900 mb-4">
-              How Dockernet Works
+              How Docconnect Works
             </h2>
             <p className="text-xl text-trust-600 max-w-2xl mx-auto">
               Simple steps to start collaborating on our secure platform
@@ -477,7 +477,7 @@ const Home = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-trust-900 mb-4">
-              Why Choose Dockernet?
+              Why Choose Docconnect?
             </h2>
             <p className="text-xl text-trust-600 max-w-2xl mx-auto">
               The enhanced platform built for secure medical freelancing and
@@ -629,7 +629,7 @@ const Home = () => {
                 <div className="w-8 h-8 bg-gradient-medical rounded-lg flex items-center justify-center">
                   <span className="text-white font-bold">D</span>
                 </div>
-                <span className="text-xl font-bold">Dockernet</span>
+                <span className="text-xl font-bold">Docconnect</span>
               </div>
               <p className="text-trust-300 mb-4 max-w-md">
                 The premier marketplace connecting senior doctors with talented
@@ -706,7 +706,7 @@ const Home = () => {
 
           <div className="border-t border-trust-800 mt-8 pt-8 text-center text-trust-400">
             <p>
-              &copy; 2025 Dockernet. All rights reserved. HIPAA Compliant
+              &copy; 2025 Docconnect. All rights reserved. HIPAA Compliant
               Medical Platform.
             </p>
           </div>

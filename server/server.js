@@ -1,4 +1,4 @@
-// server/server.js - Updated with Job System Routes and Auto-Admin Creation
+// server/server.js - Updated with Stripe Subscription System
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -63,7 +63,24 @@ app.use("/api/auth/", authLimiter);
 app.use("/api/jobs/create", jobPostingLimiter);
 app.use("/api/applications/submit", applicationLimiter);
 
-// Body parsing middleware
+// ============================================================================
+// WEBHOOK RAW BODY PARSING (Add BEFORE other body parsing middleware)
+// ============================================================================
+
+// This MUST come before express.json() to preserve raw body for webhook signature verification
+const subscriptionRoutes = require("./routes/subscriptions");
+
+// Webhook route needs raw body
+app.post(
+  "/api/subscriptions/webhook",
+  express.raw({ type: "application/json" }),
+  subscriptionRoutes
+);
+
+// ============================================================================
+// REGULAR BODY PARSING (Keep existing setup)
+// ============================================================================
+
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -151,6 +168,23 @@ process.on("SIGINT", async () => {
   console.log("MongoDB connection closed through app termination");
   process.exit(0);
 });
+
+// ============================================================================
+// STRIPE INITIALIZATION (Add after middleware)
+// ============================================================================
+
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
+// Verify Stripe connection on startup
+if (process.env.STRIPE_SECRET_KEY) {
+  stripe.balance.retrieve((err, balance) => {
+    if (err) {
+      console.error("⚠️  Stripe connection failed:", err.message);
+    } else {
+      console.log("✅ Stripe connected successfully");
+    }
+  });
+}
 
 // Health check routes
 app.get("/api/health", (req, res) => {
@@ -242,12 +276,20 @@ const adminRoutes = require("./routes/admin");
 const jobRoutes = require("./routes/jobs");
 const applicationRoutes = require("./routes/applications");
 
+// ============================================================================
+// MOUNT SUBSCRIPTION ROUTES (Add with other routes)
+// ============================================================================
+
+const subscriptionsRouter = require("./routes/subscriptions");
+app.use("/api/subscriptions", subscriptionsRouter);
+
 // Mount routes with appropriate middleware
 app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/jobs", jobRoutes);
 app.use("/api/applications", applicationRoutes);
+app.use("/api/subscriptions", subscriptionRoutes);
 
 // 404 handler for API routes
 app.all(/^\/api\/.*$/, (req, res) => {
@@ -427,13 +469,16 @@ const server = app.listen(PORT, () => {
   console.log("   • Job Posting System");
   console.log("   • Application Management");
   console.log("   • Smart Job Matching");
+  console.log("   • Subscription System (Stripe)");
+  console.log("   • Plan Management");
+  console.log("   • Feature Access Control");
   console.log("   • Admin Dashboard");
   console.log("=================================");
   console.log(`🚀 API Documentation: http://localhost:${PORT}/api/status`);
   console.log(`💊 Health Check: http://localhost:${PORT}/api/health`);
   console.log("=================================");
 
-  // ✅ Add THIS block here, after server start
+  // List registered API routes
   if (app._router && app._router.stack) {
     console.log("📋 Registered API Routes:");
     app._router.stack.forEach((r) => {

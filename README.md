@@ -576,20 +576,26 @@ doconnect/
 │   │   ├── profileController.js        # ✅ Enhanced profile management
 │   │   ├── adminController.js          # ✅ Admin verification system
 │   │   ├── jobController.js            # ✅ Job posting management
-│   │   └── applicationController.js    # ✅ Application tracking system
+│   │   ├── applicationController.js    # ✅ Application tracking system
+│   │   └── subscriptionController.js   # Handles subscription flow
 │   ├── 📁 middleware/
 │   │   ├── auth.js                     # ✅ JWT and role-based auth
+│   │   ├── jobAuth.js
+│   │   ├── jobValidation.js
+│   │   ├── subscription.js             # Subscription verification middleware
 │   │   └── validation.js               # ✅ Comprehensive input validation
 │   ├── 📁 models/
 │   │   ├── User.js                     # ✅ Enhanced Doctor/User schema
 │   │   ├── Job.js                      # ✅ Job posting schema
+│   │   ├── Subscription.js             # Stripe subscription model
 │   │   └── Application.js              # ✅ Application tracking schema
 │   ├── 📁 routes/
 │   │   ├── auth.js                     # ✅ Authentication endpoints
 │   │   ├── profile.js                  # ✅ Profile management routes
 │   │   ├── admin.js                    # ✅ Admin verification routes
 │   │   ├── jobs.js                     # ✅ Job posting routes
-│   │   └── applications.js             # ✅ Application management routes
+│   │   ├── applications.js             # ✅ Application management routes
+│   │   └── subscriptions.js            # Subscription-related routes
 │   ├── 📁 utils/                       # Backend utility functions
 │   ├── server.js                       # ✅ Express server with all routes
 │   └── package.json                    # Backend dependencies

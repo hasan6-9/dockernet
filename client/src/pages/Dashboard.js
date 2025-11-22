@@ -1,13 +1,9 @@
-// ============================================================================
-// IMPORTS
-// ============================================================================
-import React, { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import toast from "react-hot-toast";
+// client/src/pages/Dashboard.js - MVP Testing Version
+import React from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import {
-  authAPI,
   profileAPI,
   jobAPI,
   applicationAPI,
@@ -16,1265 +12,175 @@ import {
 } from "../api";
 import {
   User,
-  Upload,
+  Briefcase,
   FileText,
   Search,
-  MessageSquare,
-  TrendingUp,
+  Plus,
+  Eye,
   Clock,
   CheckCircle,
-  AlertCircle,
   XCircle,
-  Star,
-  Eye,
-  Calendar,
-  DollarSign,
-  Award,
+  TrendingUp,
   Users,
-  Settings,
-  HelpCircle,
-  Bell,
-  ArrowRight,
-  ChevronRight,
-  Activity,
   Shield,
-  Briefcase,
-  Stethoscope,
-  Plus,
-  BarChart3,
-  Target,
+  ArrowRight,
+  Loader,
+  AlertCircle,
+  LogOut,
 } from "lucide-react";
-
-// ============================================================================
-// LOADING COMPONENT
-// ============================================================================
-const DashboardSkeleton = () => (
-  <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
-    <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-      <div className="animate-pulse space-y-8">
-        {/* Header Skeleton */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-          <div className="h-8 bg-slate-200 rounded w-1/3 mb-4"></div>
-          <div className="h-6 bg-slate-200 rounded w-2/3"></div>
-        </div>
-
-        {/* Stats Skeleton */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="bg-white rounded-xl shadow-sm border border-slate-200 p-6"
-            >
-              <div className="h-4 bg-slate-200 rounded w-1/2 mb-2"></div>
-              <div className="h-8 bg-slate-200 rounded w-1/3 mb-2"></div>
-              <div className="h-3 bg-slate-200 rounded w-2/3"></div>
-            </div>
-          ))}
-        </div>
-
-        {/* Quick Actions Skeleton */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {[1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="bg-white rounded-xl shadow-sm border border-slate-200 p-6"
-            >
-              <div className="h-12 w-12 bg-slate-200 rounded-xl mb-4"></div>
-              <div className="h-6 bg-slate-200 rounded w-2/3 mb-2"></div>
-              <div className="h-4 bg-slate-200 rounded w-full"></div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  </div>
-);
 
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 const Dashboard = () => {
-  // --------------------------------------------------------------------------
-  // HOOKS & STATE
-  // --------------------------------------------------------------------------
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { user, logout, isJunior, isSenior, isAdmin } = useAuth();
-  const [currentTime, setCurrentTime] = useState(new Date());
 
-  // --------------------------------------------------------------------------
-  // DATA FETCHING - Profile & Analytics
-  // --------------------------------------------------------------------------
-  const { data: profileData, isLoading: profileLoading } = useQuery({
-    queryKey: ["profile", user?.id],
+  // Fetch profile data for all users
+  const { data: profileData } = useQuery({
+    queryKey: ["profile", "me"],
     queryFn: () => profileAPI.getMe(),
     enabled: !!user && !isAdmin(),
-    staleTime: 5 * 60 * 1000,
   });
 
-  const { data: analyticsData } = useQuery({
-    queryKey: ["profile-analytics", user?.id],
-    queryFn: () => profileAPI.getAnalytics(),
-    enabled:
-      !!user && !isAdmin() && user?.verificationStatus?.overall === "verified",
-    staleTime: 10 * 60 * 1000,
-  });
+  const profile = profileData?.data?.data || profileData?.data || user;
 
-  // --------------------------------------------------------------------------
-  // JUNIOR DOCTOR DATA
-  // --------------------------------------------------------------------------
-  const { data: myApplications } = useQuery({
+  // Role-specific data fetching
+  const { data: myApplicationsData } = useQuery({
     queryKey: ["my-applications", "dashboard"],
-    queryFn: () =>
-      applicationAPI.getMyApplications({ limit: 5, sortBy: "recent" }),
+    queryFn: () => applicationAPI.getMyApplications({ limit: 5 }),
     enabled: isJunior(),
-    staleTime: 2 * 60 * 1000,
   });
 
-  const { data: jobRecommendations } = useQuery({
+  const { data: jobRecommendationsData } = useQuery({
     queryKey: ["job-recommendations", "dashboard"],
     queryFn: () => jobAPI.getRecommendations({ limit: 5 }),
     enabled: isJunior(),
-    staleTime: 5 * 60 * 1000,
   });
 
-  // --------------------------------------------------------------------------
-  // SENIOR DOCTOR DATA
-  // --------------------------------------------------------------------------
-  const { data: myJobs } = useQuery({
+  const { data: myJobsData } = useQuery({
     queryKey: ["my-jobs", "dashboard"],
-    queryFn: () => jobAPI.getMyJobs({ limit: 5, sortBy: "recent" }),
+    queryFn: () => jobAPI.getMyJobs({ limit: 5 }),
     enabled: isSenior(),
-    staleTime: 2 * 60 * 1000,
   });
 
-  const { data: receivedApplications } = useQuery({
+  const { data: receivedApplicationsData } = useQuery({
     queryKey: ["received-applications", "dashboard"],
-    queryFn: () => applicationAPI.getReceived({ limit: 5, sortBy: "recent" }),
+    queryFn: () => applicationAPI.getReceived({ limit: 5 }),
     enabled: isSenior(),
-    staleTime: 2 * 60 * 1000,
   });
 
-  // --------------------------------------------------------------------------
-  // ADMIN DATA
-  // --------------------------------------------------------------------------
   const { data: adminDashboardData } = useQuery({
     queryKey: ["admin-dashboard"],
     queryFn: () => adminAPI.getDashboard(),
     enabled: isAdmin(),
-    staleTime: 2 * 60 * 1000,
   });
 
-  const { data: pendingVerifications } = useQuery({
-    queryKey: ["pending-verifications"],
+  const { data: pendingVerificationsData } = useQuery({
+    queryKey: ["pending-verifications", "dashboard"],
     queryFn: () => adminAPI.getPendingVerifications({ limit: 5 }),
     enabled: isAdmin(),
-    staleTime: 2 * 60 * 1000,
   });
 
-  // --------------------------------------------------------------------------
-  // EFFECTS
-  // --------------------------------------------------------------------------
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // --------------------------------------------------------------------------
-  // EVENT HANDLERS
-  // --------------------------------------------------------------------------
   const handleLogout = async () => {
-    try {
-      await logout();
-      toast.success("Logged out successfully");
-      navigate("/login");
-    } catch (error) {
-      const errorInfo = handleApiError(error);
-      toast.error(errorInfo.message);
-    }
+    await logout();
+    navigate("/login");
   };
 
-  // --------------------------------------------------------------------------
-  // UTILITY FUNCTIONS
-  // --------------------------------------------------------------------------
-  const getGreeting = () => {
-    const hour = currentTime.getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 18) return "Good afternoon";
-    return "Good evening";
-  };
-
-  const getVerificationBadge = (status) => {
-    const badges = {
-      verified: {
-        color: "bg-emerald-100 text-emerald-800",
-        icon: CheckCircle,
-        text: "Verified",
-      },
-      partial: {
-        color: "bg-yellow-100 text-yellow-800",
-        icon: AlertCircle,
-        text: "Partial Verification",
-      },
-      pending: {
-        color: "bg-blue-100 text-blue-800",
-        icon: Clock,
-        text: "Under Review",
-      },
-      rejected: {
-        color: "bg-red-100 text-red-800",
-        icon: XCircle,
-        text: "Verification Failed",
-      },
-    };
-    const badge = badges[status] || badges.pending;
-    const Icon = badge.icon;
+  if (!user) {
     return (
-      <span
-        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.color}`}
-      >
-        <Icon className="w-3 h-3 mr-1" />
-        {badge.text}
-      </span>
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader className="w-12 h-12 animate-spin text-blue-600" />
+      </div>
     );
-  };
-
-  const calculateProfileCompletion = () => {
-    // ✅ FIX: Access the nested data structure correctly
-    const profile = profileData?.data?.data || profileData?.data || user;
-
-    if (!profile) return { percentage: 0, steps: [], missing: [] };
-
-    console.log("🔍 Profile object:", profile);
-    console.log("🔍 Profile completion field:", profile.profileCompletion);
-
-    // ✅ Prefer backend calculation if available
-    if (
-      profile.profileCompletion &&
-      typeof profile.profileCompletion.percentage === "number"
-    ) {
-      const backendData = {
-        percentage: profile.profileCompletion.percentage,
-        steps: [],
-        missing: profile.profileCompletion.missingSections || [],
-      };
-      console.log("✅ Using backend calculation:", backendData);
-      return backendData;
-    }
-
-    console.log("⚠️ Backend data not available, using frontend calculation");
-
-    // Fallback to frontend calculation
-    const allSteps = [
-      { key: "basic_info", title: "Basic Information", completed: true },
-      {
-        key: "profile_photo",
-        title: "Profile Photo",
-        completed: !!(profile.profilePhoto?.url || profile.profilePhoto),
-      },
-      {
-        key: "bio",
-        title: "Professional Bio",
-        completed: profile.bio?.length > 50,
-      },
-      {
-        key: "experience",
-        title: "Work Experience",
-        completed: profile.experiences?.length > 0,
-      },
-      {
-        key: "skills",
-        title: "Skills & Expertise",
-        completed: profile.skills?.length >= 3,
-      },
-      {
-        key: "certifications",
-        title: "Certifications",
-        completed: profile.certifications?.length > 0,
-      },
-      {
-        key: "documents",
-        title: "Verification Documents",
-        completed: profile.documents?.length > 0,
-      },
-      {
-        key: "availability",
-        title: "Availability Settings",
-        completed: !!(
-          profile.availability?.weeklySchedule ||
-          profile.availability?.hoursPerWeek
-        ),
-      },
-    ];
-
-    const completed = allSteps.filter((step) => step.completed).length;
-    const missing = allSteps.filter((step) => !step.completed);
-
-    return {
-      percentage: Math.round((completed / allSteps.length) * 100),
-      steps: allSteps,
-      missing: missing.slice(0, 3),
-    };
-  };
-
-  // Add this right after the calculateProfileCompletion function definition
-  useEffect(() => {
-    if (profileData) {
-      console.log("=== Dashboard Profile Data ===");
-      console.log("Raw profileData:", profileData);
-      console.log("profileData.data:", profileData.data);
-      console.log("profileData.data.data:", profileData.data?.data);
-
-      const profile = profileData?.data?.data || profileData?.data;
-      console.log("Extracted profile:", profile);
-      console.log(
-        "Profile completion from backend:",
-        profile?.profileCompletion
-      );
-
-      const calculated = calculateProfileCompletion();
-      console.log("Calculated result:", calculated);
-    }
-  }, [profileData]);
-
-  // --------------------------------------------------------------------------
-  // ROLE-SPECIFIC DASHBOARD CONTENT
-  // --------------------------------------------------------------------------
-  const getSeniorDoctorDashboard = () => {
-    const jobsData = myJobs?.data?.data || [];
-    const applicationsData = receivedApplications?.data?.data || [];
-    const jobsPagination = myJobs?.data?.pagination || {};
-    const appsPagination = receivedApplications?.data?.pagination || {};
-
-    // Count pending applications
-    const pendingAppsCount =
-      applicationsData.filter(
-        (app) => app.status === "submitted" || app.status === "under_review"
-      ).length || 0;
-
-    // Count new messages (mock for now - will be real when messaging implemented)
-    const newMessagesCount = 3;
-
-    const quickActions = [
-      {
-        title: "Post New Job",
-        description: "Create opportunities for junior doctors",
-        icon: Plus,
-        link: "/jobs/create",
-        color: "bg-gradient-to-r from-blue-500 to-blue-600",
-        urgent: false,
-      },
-      {
-        title: "Manage Jobs",
-        description: `${jobsPagination.total || 0} active job postings`,
-        icon: Briefcase,
-        link: "/jobs/manage",
-        color: "bg-gradient-to-r from-green-500 to-green-600",
-        urgent: false,
-        badge: jobsPagination.total > 0 ? String(jobsPagination.total) : null,
-      },
-      {
-        title: "Review Applications",
-        description: `${pendingAppsCount} applications pending review`,
-        icon: FileText,
-        link: "/applications",
-        color: "bg-gradient-to-r from-amber-500 to-amber-600",
-        urgent: pendingAppsCount > 0,
-        badge: pendingAppsCount > 0 ? String(pendingAppsCount) : null,
-      },
-      {
-        title: "Find Doctors",
-        description: "Search qualified junior doctors",
-        icon: Search,
-        link: "/search",
-        color: "bg-gradient-to-r from-emerald-500 to-emerald-600",
-        urgent: false,
-      },
-    ];
-
-    const stats = [
-      {
-        label: "Active Jobs",
-        value: String(jobsPagination.total || 0),
-        icon: Briefcase,
-        trend:
-          jobsData.length > 0 ? `${jobsData.length} recent` : "No jobs yet",
-      },
-      {
-        label: "Total Applications",
-        value: String(appsPagination.total || 0),
-        icon: FileText,
-        trend:
-          pendingAppsCount > 0 ? `${pendingAppsCount} pending` : "All reviewed",
-      },
-      {
-        label: "Profile Views",
-        value: String(analyticsData?.data?.profileViews?.length || 0),
-        icon: Eye,
-        trend: "This month",
-      },
-      {
-        label: "Success Rate",
-        value: "94%",
-        icon: Target,
-        trend: "Above average",
-      },
-    ];
-
-    return { quickActions, stats };
-  };
-
-  const getJuniorDoctorDashboard = () => {
-    const applicationsData = myApplications?.data?.data || [];
-    const recommendationsData = jobRecommendations?.data?.data || [];
-    const appsPagination = myApplications?.data?.pagination || {};
-    const { percentage: profileCompletion } = calculateProfileCompletion();
-
-    // Count pending applications
-    const pendingAppsCount =
-      applicationsData.filter(
-        (app) => app.status === "submitted" || app.status === "under_review"
-      ).length || 0;
-
-    const quickActions = [
-      {
-        title: "Browse Jobs",
-        description: `${recommendationsData.length} new opportunities`,
-        icon: Search,
-        link: "/jobs",
-        color: "bg-gradient-to-r from-blue-500 to-blue-600",
-        urgent: false,
-        badge:
-          recommendationsData.length > 0
-            ? String(recommendationsData.length)
-            : null,
-      },
-      {
-        title: "My Applications",
-        description: `${appsPagination.total || 0} total applications`,
-        icon: FileText,
-        link: "/applications",
-        color: "bg-gradient-to-r from-purple-500 to-purple-600",
-        urgent: pendingAppsCount > 0,
-        badge: pendingAppsCount > 0 ? String(pendingAppsCount) : null,
-      },
-      {
-        title: "Complete Profile",
-        description: `${100 - profileCompletion}% remaining`,
-        icon: User,
-        link: "/profile",
-        color: "bg-gradient-to-r from-emerald-500 to-emerald-600",
-        urgent: profileCompletion < 80,
-      },
-      {
-        title: "Skill Assessment",
-        description: "Verify your expertise",
-        icon: Award,
-        link: "/assessments",
-        color: "bg-gradient-to-r from-purple-500 to-purple-600",
-        urgent: false,
-      },
-    ];
-
-    const stats = [
-      {
-        label: "Profile Views",
-        value: String(analyticsData?.data?.recentViews || 0),
-        icon: Eye,
-        trend: "Last 30 days",
-      },
-      {
-        label: "Applications",
-        value: String(appsPagination.total || 0),
-        icon: FileText,
-        trend:
-          pendingAppsCount > 0 ? `${pendingAppsCount} pending` : "All reviewed",
-      },
-      {
-        label: "Profile Score",
-        value: `${profileCompletion}%`,
-        icon: Target,
-        trend: profileCompletion >= 80 ? "Excellent" : "Needs improvement",
-      },
-      {
-        label: "Match Rate",
-        value: "85%",
-        icon: Star,
-        trend: "Above average",
-      },
-    ];
-
-    return { quickActions, stats };
-  };
-
-  const getAdminDashboard = () => {
-    const dashData = adminDashboardData?.data || {};
-    const pendingData = pendingVerifications?.data?.data || [];
-    const pendingCount = pendingVerifications?.data?.pagination?.total || 0;
-
-    const quickActions = [
-      {
-        title: "Pending Verifications",
-        description: `${pendingCount} doctors awaiting verification`,
-        icon: Shield,
-        link: "/admin/verifications",
-        color: "bg-gradient-to-r from-red-500 to-red-600",
-        urgent: pendingCount > 0,
-        badge: pendingCount > 0 ? String(pendingCount) : null,
-      },
-      {
-        title: "User Management",
-        description: `${dashData.totalUsers || 0} registered users`,
-        icon: Users,
-        link: "/admin/users",
-        color: "bg-gradient-to-r from-blue-500 to-blue-600",
-        urgent: false,
-      },
-      {
-        title: "Platform Analytics",
-        description: "View system metrics",
-        icon: BarChart3,
-        link: "/admin/analytics",
-        color: "bg-gradient-to-r from-emerald-500 to-emerald-600",
-        urgent: false,
-      },
-      {
-        title: "Job Moderation",
-        description: `${dashData.activeJobs || 0} active jobs`,
-        icon: Briefcase,
-        link: "/admin/jobs",
-        color: "bg-gradient-to-r from-amber-500 to-amber-600",
-        urgent: false,
-      },
-    ];
-
-    const stats = [
-      {
-        label: "Total Users",
-        value: String(dashData.totalUsers || 0),
-        icon: Users,
-        trend: dashData.newUsersThisWeek
-          ? `+${dashData.newUsersThisWeek} this week`
-          : "No data",
-      },
-      {
-        label: "Pending Reviews",
-        value: String(pendingCount),
-        icon: Clock,
-        trend: pendingCount > 5 ? "Urgent" : "On track",
-      },
-      {
-        label: "Active Jobs",
-        value: String(dashData.activeJobs || 0),
-        icon: Briefcase,
-        trend: "Platform-wide",
-      },
-      {
-        label: "Platform Health",
-        value: "98.9%",
-        icon: Activity,
-        trend: "All systems operational",
-      },
-    ];
-
-    return { quickActions, stats };
-  };
-
-  // --------------------------------------------------------------------------
-  // GET DASHBOARD CONTENT BASED ON ROLE
-  // --------------------------------------------------------------------------
-  const getDashboardContent = () => {
-    if (isSenior()) return getSeniorDoctorDashboard();
-    if (isJunior()) return getJuniorDoctorDashboard();
-    if (isAdmin()) return getAdminDashboard();
-    return getJuniorDoctorDashboard(); // Default
-  };
-
-  // --------------------------------------------------------------------------
-  // LOADING STATE
-  // --------------------------------------------------------------------------
-  if (!user || profileLoading) {
-    return <DashboardSkeleton />;
   }
 
-  // --------------------------------------------------------------------------
-  // GET DASHBOARD DATA
-  // --------------------------------------------------------------------------
-  const { quickActions, stats } = getDashboardContent();
-  const { percentage: profileCompletion, missing: incompleteSections } =
-    calculateProfileCompletion();
-
-  // --------------------------------------------------------------------------
-  // RECENT ACTIVITY (Real data when available)
-  // --------------------------------------------------------------------------
-  const getRecentActivity = () => {
-    if (isSenior()) {
-      const applications = receivedApplications?.data?.data || [];
-      return applications.slice(0, 3).map((app) => ({
-        icon: FileText,
-        iconBg: "bg-green-100",
-        iconColor: "text-green-600",
-        title: "New application received",
-        description: `Dr. ${app.applicant_id?.firstName} ${app.applicant_id?.lastName} applied for "${app.job_id?.title}"`,
-        time: new Date(app.createdAt).toLocaleString(),
-      }));
-    }
-
-    if (isJunior()) {
-      const applications = myApplications?.data?.data || [];
-      return applications.slice(0, 3).map((app) => ({
-        icon: app.status === "accepted" ? CheckCircle : Clock,
-        iconBg: app.status === "accepted" ? "bg-green-100" : "bg-blue-100",
-        iconColor:
-          app.status === "accepted" ? "text-green-600" : "text-blue-600",
-        title: `Application ${app.status}`,
-        description: `Your application for "${app.job_id?.title}"`,
-        time: new Date(app.updatedAt).toLocaleString(),
-      }));
-    }
-
-    if (isAdmin()) {
-      const pending = pendingVerifications?.data?.data || [];
-      return pending.slice(0, 3).map((user) => ({
-        icon: Shield,
-        iconBg: "bg-amber-100",
-        iconColor: "text-amber-600",
-        title: "New verification request",
-        description: `Dr. ${user.firstName} ${user.lastName} submitted documents`,
-        time: user.documents?.[0]?.uploadedAt
-          ? new Date(user.documents[0].uploadedAt).toLocaleString()
-          : "Recently",
-      }));
-    }
-
-    return [];
-  };
-
-  const recentActivity = getRecentActivity();
-
-  // --------------------------------------------------------------------------
-  // RENDER
-  // --------------------------------------------------------------------------
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-lg border-b border-slate-200 sticky top-0 z-50">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            {/* Logo */}
-            <div className="flex items-center space-x-4">
-              <Link to="/" className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl flex items-center justify-center">
-                  <Stethoscope className="w-6 h-6 text-white" />
-                </div>
-                <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
-                  Doconnect
-                </span>
-              </Link>
-
-              {!isAdmin() && (
-                <div className="hidden sm:flex items-center">
-                  {getVerificationBadge(
-                    user?.verificationStatus?.overall || "pending"
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* User Menu */}
-            <div className="flex items-center space-x-4">
-              <div className="hidden md:flex items-center space-x-3 text-sm text-slate-600">
-                <Calendar className="w-4 h-4" />
-                <span>{currentTime.toLocaleDateString()}</span>
-                <span className="text-slate-400">•</span>
-                <Clock className="w-4 h-4" />
-                <span>
-                  {currentTime.toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </span>
-              </div>
-
-              <button className="relative p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors">
-                <Bell className="w-5 h-5" />
-                {recentActivity.length > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                    {recentActivity.length}
-                  </span>
-                )}
-              </button>
-
-              <Link
-                to="/profile"
-                className="flex items-center space-x-3 bg-white hover:bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 transition-all duration-200 group"
-              >
-                <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg flex items-center justify-center text-white text-sm font-semibold">
-                  {user?.firstName?.[0]}
-                  {user?.lastName?.[0]}
-                </div>
-                <div className="hidden sm:block">
-                  <p className="text-sm font-medium text-slate-900 group-hover:text-blue-600">
-                    Dr. {user?.firstName} {user?.lastName}
-                  </p>
-                  <p className="text-xs text-slate-500 capitalize">
-                    {user?.role === "senior"
-                      ? "Senior Doctor"
-                      : user?.role === "junior"
-                      ? "Junior Doctor"
-                      : "Administrator"}
-                  </p>
-                </div>
-                <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
-              </Link>
-
+            <h1 className="text-2xl font-bold text-blue-600">Doconnect</h1>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-gray-600">
+                {user.firstName} {user.lastName} ({user.role})
+              </span>
               <button
                 onClick={handleLogout}
-                className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                title="Logout"
+                className="text-gray-600 hover:text-red-600"
               >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                  />
-                </svg>
+                <LogOut className="w-5 h-5" />
               </button>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}
-        <div className="mb-8">
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
-              <div className="mb-4 lg:mb-0">
-                <h1 className="text-3xl font-bold text-slate-900 mb-2">
-                  {getGreeting()}, Dr. {user?.firstName}!
-                </h1>
-                <p className="text-slate-600 text-lg">
-                  {isSenior()
-                    ? "Ready to find exceptional junior doctors for your practice?"
-                    : isJunior()
-                    ? "Discover new opportunities to advance your medical career."
-                    : "Welcome to your administrative dashboard."}
-                </p>
-              </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            Welcome back, Dr. {user.firstName}!
+          </h2>
+          <p className="text-gray-600">
+            {isJunior() &&
+              "Discover new opportunities to advance your medical career."}
+            {isSenior() && "Manage your job postings and review applications."}
+            {isAdmin() && "Oversee platform operations and user verifications."}
+          </p>
 
-              {/* Profile Completion - Only for non-admin users */}
-              {!isAdmin() && profileCompletion < 100 && (
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-blue-900">
-                      Profile Completion
-                    </span>
-                    <span className="text-sm font-bold text-blue-600">
-                      {profileCompletion}%
-                    </span>
-                  </div>
-                  <div className="w-48 bg-white rounded-full h-2 mb-3">
-                    <div
-                      className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${profileCompletion}%` }}
-                    ></div>
-                  </div>
-                  <Link
-                    to="/profile"
-                    className="text-sm font-medium text-blue-600 hover:text-blue-700 flex items-center"
-                  >
-                    Complete profile <ArrowRight className="w-3 h-3 ml-1" />
-                  </Link>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {stats.map((stat, index) => {
-            const Icon = stat.icon;
-            return (
-              <div
-                key={index}
-                className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-slate-600 mb-1">
-                      {stat.label}
-                    </p>
-                    <p className="text-2xl font-bold text-slate-900">
-                      {stat.value}
-                    </p>
-                    <p className="text-xs text-emerald-600 font-medium mt-1">
-                      {stat.trend}
-                    </p>
-                  </div>
-                  <div className="w-12 h-12 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center">
-                    <Icon className="w-6 h-6 text-blue-600" />
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="grid lg:grid-cols-3 gap-8">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* Quick Actions */}
-            <div>
-              <h2 className="text-xl font-semibold text-slate-900 mb-6">
-                Quick Actions
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {quickActions.map((action, index) => {
-                  const Icon = action.icon;
-                  return (
-                    <Link
-                      key={index}
-                      to={action.link}
-                      className="group relative bg-white rounded-xl shadow-sm border-slate-200 p-6 hover:shadow-lg transition-all duration-200 hover:scale-[1.02]"
-                    >
-                      {action.urgent && (
-                        <div className="absolute top-3 right-3">
-                          <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-                        </div>
-                      )}
-
-                      <div className="flex items-center justify-between mb-4">
-                        <div
-                          className={`w-12 h-12 ${action.color} rounded-xl flex items-center justify-center text-white shadow-lg`}
-                        >
-                          <Icon className="w-6 h-6" />
-                        </div>
-                        {action.badge && (
-                          <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-1 rounded-full">
-                            {action.badge}
-                          </span>
-                        )}
-                      </div>
-
-                      <h3 className="text-lg font-semibold text-slate-900 mb-2 group-hover:text-blue-600 transition-colors">
-                        {action.title}
-                      </h3>
-                      <p className="text-slate-600 text-sm mb-4">
-                        {action.description}
-                      </p>
-
-                      <div className="flex items-center text-blue-600 font-medium text-sm">
-                        <span>Take action</span>
-                        <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Recent Activity */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-slate-900">
-                  Recent Activity
-                </h2>
-                <Link
-                  to={isAdmin() ? "/admin/activity" : "/activity"}
-                  className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center"
-                >
-                  View all <ChevronRight className="w-4 h-4 ml-1" />
-                </Link>
-              </div>
-
-              <div className="space-y-4">
-                {recentActivity.length > 0 ? (
-                  recentActivity.map((activity, index) => {
-                    const Icon = activity.icon;
-                    return (
-                      <div
-                        key={index}
-                        className="flex items-start space-x-4 p-3 bg-slate-50 rounded-lg"
-                      >
-                        <div
-                          className={`w-8 h-8 ${activity.iconBg} rounded-lg flex items-center justify-center flex-shrink-0`}
-                        >
-                          <Icon className={`w-4 h-4 ${activity.iconColor}`} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-slate-900">
-                            {activity.title}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            {activity.description} • {activity.time}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="text-center py-8">
-                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <Activity className="w-8 h-8 text-slate-400" />
-                    </div>
-                    <p className="text-sm text-slate-600">No recent activity</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Complete Your Profile Section */}
-            {!isAdmin() &&
-              profileCompletion < 100 &&
-              incompleteSections.length > 0 && (
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                  <h3 className="text-lg font-semibold text-slate-900 mb-4">
-                    Complete Your Profile
-                  </h3>
-                  <div className="space-y-3">
-                    {incompleteSections.map((section, index) => {
-                      // ✅ Handle both string and object formats
-                      const sectionTitle =
-                        typeof section === "string" ? section : section.title;
-                      const sectionKey =
-                        typeof section === "string" ? section : section.key;
-
-                      return (
-                        <Link
-                          key={sectionKey || index}
-                          to="/profile"
-                          className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors group"
-                        >
-                          <div className="flex items-center space-x-3">
-                            <div className="w-6 h-6 border-2 border-slate-300 rounded-full flex items-center justify-center">
-                              <div className="w-2 h-2 bg-slate-300 rounded-full"></div>
-                            </div>
-                            <span className="text-sm font-medium text-slate-900">
-                              {sectionTitle}
-                            </span>
-                          </div>
-                          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-            {/* Notifications */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-slate-900">
-                  Notifications
-                </h3>
-                {recentActivity.length > 0 && (
-                  <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded-full">
-                    {recentActivity.length} New
+          {!isAdmin() && profile?.profileCompletion && (
+            <div className="mt-4 flex items-center gap-4">
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium text-gray-700">
+                    Profile Completion
                   </span>
-                )}
-              </div>
-
-              <div className="space-y-3">
-                {recentActivity.slice(0, 3).map((activity, index) => (
-                  <div
-                    key={index}
-                    className="flex items-start space-x-3 p-2 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
-                  >
-                    <div className="w-2 h-2 bg-blue-400 rounded-full flex-shrink-0 mt-2"></div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900">
-                        {activity.title}
-                      </p>
-                      <p className="text-xs text-slate-500">{activity.time}</p>
-                    </div>
-                  </div>
-                ))}
-
-                {recentActivity.length === 0 && (
-                  <p className="text-sm text-slate-500 text-center py-4">
-                    No new notifications
-                  </p>
-                )}
-              </div>
-
-              {recentActivity.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-slate-100">
-                  <Link
-                    to="/notifications"
-                    className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center"
-                  >
-                    View all notifications{" "}
-                    <ArrowRight className="w-3 h-3 ml-1" />
-                  </Link>
+                  <span className="text-sm font-bold text-blue-600">
+                    {profile.profileCompletion.percentage}%
+                  </span>
                 </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-blue-600 h-2 rounded-full transition-all"
+                    style={{
+                      width: `${profile.profileCompletion.percentage}%`,
+                    }}
+                  />
+                </div>
+              </div>
+              {profile.profileCompletion.percentage < 100 && (
+                <Link to="/profile" className="btn-primary text-sm">
+                  Complete Profile
+                </Link>
               )}
             </div>
-
-            {/* Quick Links */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-              <h3 className="text-lg font-semibold text-slate-900 mb-4">
-                Quick Links
-              </h3>
-
-              <div className="space-y-2">
-                <Link
-                  to="/profile"
-                  className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-lg transition-colors group"
-                >
-                  <div className="flex items-center space-x-3">
-                    <User className="w-4 h-4 text-slate-500 group-hover:text-blue-600" />
-                    <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900">
-                      My Profile
-                    </span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
-                </Link>
-
-                <Link
-                  to="/settings"
-                  className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-lg transition-colors group"
-                >
-                  <div className="flex items-center space-x-3">
-                    <Settings className="w-4 h-4 text-slate-500 group-hover:text-blue-600" />
-                    <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900">
-                      Settings
-                    </span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
-                </Link>
-
-                <Link
-                  to="/help"
-                  className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-lg transition-colors group"
-                >
-                  <div className="flex items-center space-x-3">
-                    <HelpCircle className="w-4 h-4 text-slate-500 group-hover:text-blue-600" />
-                    <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900">
-                      Help Center
-                    </span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
-                </Link>
-
-                {!isAdmin() && (
-                  <Link
-                    to="/billing"
-                    className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-lg transition-colors group"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <DollarSign className="w-4 h-4 text-slate-500 group-hover:text-blue-600" />
-                      <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900">
-                        Billing & Plans
-                      </span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
-                  </Link>
-                )}
-              </div>
-            </div>
-
-            {/* Verification Status (for non-admin users) */}
-            {!isAdmin() && user?.verificationStatus?.overall !== "verified" && (
-              <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-6">
-                <div className="flex items-start space-x-4">
-                  <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Shield className="w-4 h-4 text-amber-600" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-amber-900 mb-2">
-                      Complete Verification
-                    </h3>
-                    <p className="text-sm text-amber-700 mb-4">
-                      Get verified to access all platform features and build
-                      trust with other professionals.
-                    </p>
-
-                    <div className="space-y-2 mb-4">
-                      {user?.verificationStatus?.identity !== "verified" && (
-                        <div className="flex items-center space-x-2">
-                          <div className="w-4 h-4 border-2 border-amber-400 rounded-full flex items-center justify-center">
-                            <div className="w-1.5 h-1.5 bg-amber-400 rounded-full"></div>
-                          </div>
-                          <span className="text-sm text-amber-800">
-                            Identity verification pending
-                          </span>
-                        </div>
-                      )}
-
-                      {user?.verificationStatus?.medical_license !==
-                        "verified" && (
-                        <div className="flex items-center space-x-2">
-                          <div className="w-4 h-4 border-2 border-amber-400 rounded-full flex items-center justify-center">
-                            <div className="w-1.5 h-1.5 bg-amber-400 rounded-full"></div>
-                          </div>
-                          <span className="text-sm text-amber-800">
-                            Medical license verification pending
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    <Link
-                      to="/profile?tab=documents"
-                      className="inline-flex items-center px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700 transition-colors"
-                    >
-                      Upload Documents <Upload className="w-3 h-3 ml-1" />
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Verified Professional Badge */}
-            {!isAdmin() && user?.verificationStatus?.overall === "verified" && (
-              <div className="bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200 rounded-xl p-6">
-                <div className="text-center">
-                  <div className="w-12 h-12 bg-gradient-to-r from-emerald-500 to-green-600 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <Award className="w-6 h-6 text-white" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-emerald-900 mb-2">
-                    Verified Professional
-                  </h3>
-                  <p className="text-sm text-emerald-700 mb-4">
-                    Your profile is verified and you're ready to connect!
-                  </p>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="text-center">
-                      <div className="text-lg font-bold text-emerald-800">
-                        {analyticsData?.data?.recentViews || 0}
-                      </div>
-                      <div className="text-xs text-emerald-600">
-                        Profile Views
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-lg font-bold text-emerald-800">
-                        {user?.rating?.average
-                          ? user.rating.average.toFixed(1)
-                          : "5.0"}
-                      </div>
-                      <div className="text-xs text-emerald-600">Rating</div>
-                    </div>
-                  </div>
-                  {isJunior() && (
-                    <Link
-                      to="/jobs"
-                      className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors"
-                    >
-                      Find Opportunities <Search className="w-3 h-3 ml-1" />
-                    </Link>
-                  )}
-                  {isSenior() && (
-                    <Link
-                      to="/jobs/create"
-                      className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors"
-                    >
-                      Post New Job <Plus className="w-3 h-3 ml-1" />
-                    </Link>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
-        {/* Admin System Overview */}
-        {isAdmin() && adminDashboardData?.data && (
-          <div className="mt-8">
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-slate-900">
-                  System Overview
-                </h2>
-                <Link
-                  to="/admin/reports"
-                  className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center"
-                >
-                  View Reports <ChevronRight className="w-4 h-4 ml-1" />
-                </Link>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-slate-50 rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-slate-600 mb-2">
-                    Pending Actions
-                  </h3>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-700">
-                        Verifications
-                      </span>
-                      <span className="text-sm font-semibold text-red-600">
-                        {pendingVerifications?.data?.pagination?.total || 0}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-700">
-                        Support Tickets
-                      </span>
-                      <span className="text-sm font-semibold text-amber-600">
-                        {adminDashboardData.data.supportTickets || 0}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-slate-50 rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-slate-600 mb-2">
-                    Platform Health
-                  </h3>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-700">Uptime</span>
-                      <span className="text-sm font-semibold text-green-600">
-                        99.9%
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-700">Status</span>
-                      <span className="text-sm font-semibold text-green-600">
-                        Operational
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-slate-50 rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-slate-600 mb-2">
-                    Recent Growth
-                  </h3>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-700">New Users</span>
-                      <span className="text-sm font-semibold text-blue-600">
-                        +{adminDashboardData.data.newUsersThisWeek || 0}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-700">
-                        Active Jobs
-                      </span>
-                      <span className="text-sm font-semibold text-blue-600">
-                        {adminDashboardData.data.activeJobs || 0}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+        {/* Role-Based Dashboard */}
+        {isJunior() && (
+          <JuniorDashboard
+            user={user}
+            profile={profile}
+            myApplicationsData={myApplicationsData}
+            jobRecommendationsData={jobRecommendationsData}
+          />
+        )}
+        {isSenior() && (
+          <SeniorDashboard
+            user={user}
+            profile={profile}
+            myJobsData={myJobsData}
+            receivedApplicationsData={receivedApplicationsData}
+          />
+        )}
+        {isAdmin() && (
+          <AdminDashboard
+            adminDashboardData={adminDashboardData}
+            pendingVerificationsData={pendingVerificationsData}
+          />
         )}
       </main>
     </div>
@@ -1282,6 +188,671 @@ const Dashboard = () => {
 };
 
 // ============================================================================
-// EXPORT
+// JUNIOR DOCTOR DASHBOARD
 // ============================================================================
+const JuniorDashboard = ({
+  user,
+  profile,
+  myApplicationsData,
+  jobRecommendationsData,
+}) => {
+  const applications = myApplicationsData?.data?.data || [];
+  const recommendations = jobRecommendationsData?.data?.data || [];
+  const appsPagination = myApplicationsData?.data?.pagination || {};
+
+  const stats = [
+    {
+      label: "Total Applications",
+      value: appsPagination.total || 0,
+      icon: FileText,
+      color: "bg-blue-100 text-blue-600",
+    },
+    {
+      label: "Pending",
+      value: applications.filter(
+        (a) => a.status === "submitted" || a.status === "under_review"
+      ).length,
+      icon: Clock,
+      color: "bg-yellow-100 text-yellow-600",
+    },
+    {
+      label: "Accepted",
+      value: applications.filter((a) => a.status === "accepted").length,
+      icon: CheckCircle,
+      color: "bg-green-100 text-green-600",
+    },
+    {
+      label: "Profile Views",
+      value: profile?.analytics?.views?.total || 0,
+      icon: Eye,
+      color: "bg-purple-100 text-purple-600",
+    },
+  ];
+
+  const quickActions = [
+    { label: "Browse Jobs", icon: Search, link: "/jobs", color: "bg-blue-600" },
+    {
+      label: "My Applications",
+      icon: FileText,
+      link: "/applications",
+      color: "bg-purple-600",
+    },
+    {
+      label: "Update Profile",
+      icon: User,
+      link: "/profile",
+      color: "bg-emerald-600",
+    },
+    {
+      label: "Search Doctors",
+      icon: Users,
+      link: "/search",
+      color: "bg-indigo-600",
+    },
+  ];
+
+  return (
+    <div className="space-y-8">
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {stats.map((stat, idx) => {
+          const Icon = stat.icon;
+          return (
+            <div
+              key={idx}
+              className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
+                  <p className="text-3xl font-bold text-gray-900">
+                    {stat.value}
+                  </p>
+                </div>
+                <div
+                  className={`w-12 h-12 ${stat.color} rounded-xl flex items-center justify-center`}
+                >
+                  <Icon className="w-6 h-6" />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {quickActions.map((action, idx) => {
+          const Icon = action.icon;
+          return (
+            <Link
+              key={idx}
+              to={action.link}
+              className={`${action.color} text-white rounded-xl p-6 hover:opacity-90 transition-opacity group`}
+            >
+              <Icon className="w-8 h-8 mb-3" />
+              <h3 className="font-semibold text-lg mb-1">{action.label}</h3>
+              <div className="flex items-center text-sm opacity-90">
+                <span>Go now</span>
+                <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-8">
+        {/* Recent Applications */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-gray-900">
+              Recent Applications
+            </h3>
+            <Link
+              to="/applications"
+              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+            >
+              View All
+            </Link>
+          </div>
+
+          {applications.length > 0 ? (
+            <div className="space-y-3">
+              {applications.map((app) => (
+                <Link
+                  key={app._id}
+                  to={`/applications`}
+                  className="block p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-gray-900">
+                        {app.job_id?.title}
+                      </h4>
+                      <p className="text-sm text-gray-600">
+                        {app.job_id?.specialty}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Applied: {new Date(app.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <StatusBadge status={app.status} />
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 mb-4">No applications yet</p>
+              <Link to="/jobs" className="btn-primary text-sm">
+                Browse Jobs
+              </Link>
+            </div>
+          )}
+        </div>
+
+        {/* Job Recommendations */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-gray-900">
+              Recommended Jobs
+            </h3>
+            <Link
+              to="/jobs"
+              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+            >
+              View All
+            </Link>
+          </div>
+
+          {recommendations.length > 0 ? (
+            <div className="space-y-3">
+              {recommendations.map((job) => (
+                <Link
+                  key={job._id}
+                  to={`/jobs/${job._id}`}
+                  className="block p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <h4 className="font-semibold text-gray-900">{job.title}</h4>
+                    {job.matchScore && (
+                      <span className="text-xs font-semibold px-2 py-1 bg-green-100 text-green-800 rounded-full">
+                        {job.matchScore}% match
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-600">{job.specialty}</p>
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-sm font-medium text-blue-600">
+                      ${job.budget?.amount?.toLocaleString()}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {job.timeline?.deadline &&
+                        new Date(job.timeline.deadline).toLocaleDateString()}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Search className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500">No recommendations available</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
+// SENIOR DOCTOR DASHBOARD
+// ============================================================================
+const SeniorDashboard = ({
+  user,
+  profile,
+  myJobsData,
+  receivedApplicationsData,
+}) => {
+  const jobs = myJobsData?.data?.data || [];
+  const applications = receivedApplicationsData?.data?.data || [];
+  const jobsPagination = myJobsData?.data?.pagination || {};
+  const appsPagination = receivedApplicationsData?.data?.pagination || {};
+
+  const activeJobs = jobs.filter((j) => j.status === "active").length;
+  const pendingApps = applications.filter(
+    (a) => a.status === "submitted" || a.status === "under_review"
+  ).length;
+
+  const stats = [
+    {
+      label: "Jobs Posted",
+      value: jobsPagination.total || 0,
+      icon: Briefcase,
+      color: "bg-blue-100 text-blue-600",
+    },
+    {
+      label: "Active Jobs",
+      value: activeJobs,
+      icon: TrendingUp,
+      color: "bg-green-100 text-green-600",
+    },
+    {
+      label: "Total Applications",
+      value: appsPagination.total || 0,
+      icon: FileText,
+      color: "bg-purple-100 text-purple-600",
+    },
+    {
+      label: "Pending Reviews",
+      value: pendingApps,
+      icon: Clock,
+      color: "bg-yellow-100 text-yellow-600",
+    },
+  ];
+
+  const quickActions = [
+    {
+      label: "Post New Job",
+      icon: Plus,
+      link: "/jobs/post",
+      color: "bg-blue-600",
+    },
+    {
+      label: "Manage Jobs",
+      icon: Briefcase,
+      link: "/jobs/manage",
+      color: "bg-green-600",
+    },
+    {
+      label: "Review Applications",
+      icon: FileText,
+      link: "/applications",
+      color: "bg-purple-600",
+    },
+    {
+      label: "Find Doctors",
+      icon: Search,
+      link: "/search",
+      color: "bg-indigo-600",
+    },
+  ];
+
+  return (
+    <div className="space-y-8">
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {stats.map((stat, idx) => {
+          const Icon = stat.icon;
+          return (
+            <div
+              key={idx}
+              className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
+                  <p className="text-3xl font-bold text-gray-900">
+                    {stat.value}
+                  </p>
+                </div>
+                <div
+                  className={`w-12 h-12 ${stat.color} rounded-xl flex items-center justify-center`}
+                >
+                  <Icon className="w-6 h-6" />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {quickActions.map((action, idx) => {
+          const Icon = action.icon;
+          return (
+            <Link
+              key={idx}
+              to={action.link}
+              className={`${action.color} text-white rounded-xl p-6 hover:opacity-90 transition-opacity group`}
+            >
+              <Icon className="w-8 h-8 mb-3" />
+              <h3 className="font-semibold text-lg mb-1">{action.label}</h3>
+              <div className="flex items-center text-sm opacity-90">
+                <span>Go now</span>
+                <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-8">
+        {/* Recent Jobs */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-gray-900">Recent Jobs</h3>
+            <Link
+              to="/jobs/manage"
+              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+            >
+              View All
+            </Link>
+          </div>
+
+          {jobs.length > 0 ? (
+            <div className="space-y-3">
+              {jobs.map((job) => (
+                <Link
+                  key={job._id}
+                  to={`/jobs/${job._id}`}
+                  className="block p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <h4 className="font-semibold text-gray-900">{job.title}</h4>
+                    <StatusBadge status={job.status} />
+                  </div>
+                  <p className="text-sm text-gray-600">{job.category}</p>
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-sm text-gray-500">
+                      {job.applications_count || 0} applications
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {new Date(job.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Briefcase className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 mb-4">No jobs posted yet</p>
+              <Link to="/jobs/post" className="btn-primary text-sm">
+                Post Your First Job
+              </Link>
+            </div>
+          )}
+        </div>
+
+        {/* Recent Applications */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-gray-900">
+              Recent Applications
+            </h3>
+            <Link
+              to="/applications"
+              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+            >
+              View All
+            </Link>
+          </div>
+
+          {applications.length > 0 ? (
+            <div className="space-y-3">
+              {applications.map((app) => (
+                <Link
+                  key={app._id}
+                  to={`/applications`}
+                  className="block p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <h4 className="font-semibold text-gray-900">
+                        Dr. {app.applicant_id?.firstName}{" "}
+                        {app.applicant_id?.lastName}
+                      </h4>
+                      <p className="text-sm text-gray-600">
+                        {app.applicant_id?.primarySpecialty}
+                      </p>
+                    </div>
+                    <StatusBadge status={app.status} />
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Applied: {new Date(app.createdAt).toLocaleDateString()}
+                  </p>
+                  {app.match_score && (
+                    <div className="mt-2">
+                      <span className="text-xs font-semibold px-2 py-1 bg-green-100 text-green-800 rounded-full">
+                        {app.match_score}% match
+                      </span>
+                    </div>
+                  )}
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500">No applications yet</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
+// ADMIN DASHBOARD
+// ============================================================================
+const AdminDashboard = ({ adminDashboardData, pendingVerificationsData }) => {
+  const dashData = adminDashboardData?.data || {};
+  const pending = pendingVerificationsData?.data?.data || [];
+  const pendingCount = pendingVerificationsData?.data?.pagination?.total || 0;
+
+  const stats = [
+    {
+      label: "Total Users",
+      value: dashData.metrics?.users?.total || 0,
+      icon: Users,
+      color: "bg-blue-100 text-blue-600",
+      subtitle: `${dashData.metrics?.users?.active || 0} active`,
+    },
+    {
+      label: "Pending Verifications",
+      value: pendingCount,
+      icon: Clock,
+      color: "bg-yellow-100 text-yellow-600",
+      urgent: pendingCount > 0,
+    },
+    {
+      label: "Active Jobs",
+      value: dashData.metrics?.jobs?.active || 0,
+      icon: Briefcase,
+      color: "bg-green-100 text-green-600",
+    },
+    {
+      label: "Platform Health",
+      value: "98.9%",
+      icon: TrendingUp,
+      color: "bg-purple-100 text-purple-600",
+    },
+  ];
+
+  const quickActions = [
+    {
+      label: "Verification Dashboard",
+      icon: Shield,
+      link: "/admin",
+      color: "bg-red-600",
+      badge: pendingCount > 0 ? pendingCount : null,
+    },
+    {
+      label: "User Management",
+      icon: Users,
+      link: "/admin/users",
+      color: "bg-blue-600",
+    },
+    {
+      label: "Platform Analytics",
+      icon: TrendingUp,
+      link: "/admin/analytics",
+      color: "bg-green-600",
+    },
+    {
+      label: "Job Moderation",
+      icon: Briefcase,
+      link: "/admin/jobs",
+      color: "bg-purple-600",
+    },
+  ];
+
+  return (
+    <div className="space-y-8">
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {stats.map((stat, idx) => {
+          const Icon = stat.icon;
+          return (
+            <div
+              key={idx}
+              className={`bg-white rounded-xl shadow-sm border p-6 ${
+                stat.urgent ? "border-red-300" : "border-gray-200"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
+                  <p className="text-3xl font-bold text-gray-900">
+                    {stat.value}
+                  </p>
+                  {stat.subtitle && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {stat.subtitle}
+                    </p>
+                  )}
+                </div>
+                <div
+                  className={`w-12 h-12 ${stat.color} rounded-xl flex items-center justify-center`}
+                >
+                  <Icon className="w-6 h-6" />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {quickActions.map((action, idx) => {
+          const Icon = action.icon;
+          return (
+            <Link
+              key={idx}
+              to={action.link}
+              className={`${action.color} text-white rounded-xl p-6 hover:opacity-90 transition-opacity group relative`}
+            >
+              {action.badge && (
+                <div className="absolute top-3 right-3 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-xs font-bold">
+                  {action.badge}
+                </div>
+              )}
+              <Icon className="w-8 h-8 mb-3" />
+              <h3 className="font-semibold text-lg mb-1">{action.label}</h3>
+              <div className="flex items-center text-sm opacity-90">
+                <span>Go now</span>
+                <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Pending Verification Queue */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-gray-900">
+            Pending Verifications
+          </h3>
+          <Link
+            to="/admin"
+            className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+          >
+            View All
+          </Link>
+        </div>
+
+        {pending.length > 0 ? (
+          <div className="space-y-3">
+            {pending.map((user) => (
+              <Link
+                key={user._id}
+                to="/admin"
+                className="block p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                      <User className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900">
+                        Dr. {user.firstName} {user.lastName}
+                      </h4>
+                      <p className="text-sm text-gray-600">
+                        {user.primarySpecialty}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full">
+                      {user.verificationStatus?.identity === "pending" &&
+                        "ID Pending"}
+                      {user.verificationStatus?.medical_license === "pending" &&
+                        "License Pending"}
+                    </span>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {new Date(user.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <Shield className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500">No pending verifications</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
+// UTILITY COMPONENTS
+// ============================================================================
+const StatusBadge = ({ status }) => {
+  const config = {
+    submitted: { color: "bg-blue-100 text-blue-800", label: "Submitted" },
+    under_review: {
+      color: "bg-purple-100 text-purple-800",
+      label: "Under Review",
+    },
+    accepted: { color: "bg-green-100 text-green-800", label: "Accepted" },
+    rejected: { color: "bg-red-100 text-red-800", label: "Rejected" },
+    active: { color: "bg-green-100 text-green-800", label: "Active" },
+    closed: { color: "bg-gray-100 text-gray-800", label: "Closed" },
+    completed: { color: "bg-blue-100 text-blue-800", label: "Completed" },
+  };
+
+  const { color, label } = config[status] || {
+    color: "bg-gray-100 text-gray-800",
+    label: status,
+  };
+
+  return (
+    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${color}`}>
+      {label}
+    </span>
+  );
+};
+
 export default Dashboard;
