@@ -1,4 +1,4 @@
-// client/src/context/AuthContext.js - Updated with Consolidated API
+// client/src/context/AuthContext.js - Fixed Login Issue
 import React, {
   createContext,
   useContext,
@@ -9,6 +9,7 @@ import React, {
 import {
   authAPI,
   profileAPI,
+  subscriptionAPI,
   setAuthToken,
   clearAuthToken,
   getAuthToken,
@@ -28,7 +29,7 @@ const initialState = {
   error: null,
 
   // Account status
-  accountStatus: null, // pending, active, inactive, suspended
+  accountStatus: null,
   verificationStatus: {
     identity: "pending",
     medical_license: "pending",
@@ -45,7 +46,7 @@ const initialState = {
   },
 
   // User role and permissions
-  role: null, // senior, junior, admin
+  role: null,
   permissions: {
     canAccessBasicFeatures: false,
     canAccessActiveFeatures: false,
@@ -60,6 +61,11 @@ const initialState = {
     searchAppearances: { total: 0, thisMonth: 0 },
     contactAttempts: { total: 0, thisMonth: 0 },
   },
+
+  // Subscription Management
+  subscription: null,
+  subscriptionLoading: false,
+  subscriptionError: null,
 };
 
 // ============================================================================
@@ -75,23 +81,14 @@ const calculatePermissions = (user) => {
   const subscription = user.subscription || {};
 
   return {
-    // Basic: authenticated (pending + active)
     canAccessBasicFeatures: ["pending", "active"].includes(accountStatus),
-
-    // Active: active account only
     canAccessActiveFeatures: accountStatus === "active",
-
-    // Professional: verified account
     canAccessProfessionalFeatures:
       accountStatus === "active" && verificationStatus.overall === "verified",
-
-    // Premium: active subscription
     canAccessPremiumFeatures:
       accountStatus === "active" &&
       subscription.status === "active" &&
       subscription.plan !== "free",
-
-    // Admin: admin role
     canAccessAdminFeatures: role === "admin" && accountStatus === "active",
   };
 };
@@ -110,7 +107,6 @@ const authReducer = (state, action) => {
       const userData = action.payload.user;
       const token = action.payload.token;
 
-      // Set token in API client
       setAuthToken(token);
 
       return {
@@ -207,6 +203,28 @@ const authReducer = (state, action) => {
         },
       };
 
+    case "SUBSCRIPTION_LOADING":
+      return {
+        ...state,
+        subscriptionLoading: true,
+        subscriptionError: null,
+      };
+
+    case "SUBSCRIPTION_SUCCESS":
+      return {
+        ...state,
+        subscription: action.payload,
+        subscriptionLoading: false,
+        subscriptionError: null,
+      };
+
+    case "SUBSCRIPTION_ERROR":
+      return {
+        ...state,
+        subscriptionLoading: false,
+        subscriptionError: action.payload,
+      };
+
     case "AUTH_ERROR":
     case "LOGIN_FAIL":
     case "REGISTER_FAIL":
@@ -222,6 +240,9 @@ const authReducer = (state, action) => {
 
     case "CLEAR_ERROR":
       return { ...state, error: null };
+
+    case "CLEAR_SUBSCRIPTION_ERROR":
+      return { ...state, subscriptionError: null };
 
     case "REFRESH_PERMISSIONS":
       return {
@@ -251,7 +272,6 @@ export const AuthProvider = ({ children }) => {
         dispatch({ type: "AUTH_LOADING" });
       }
 
-      // Check if we have a token
       if (!getAuthToken()) {
         dispatch({ type: "AUTH_ERROR", payload: null });
         return;
@@ -275,6 +295,9 @@ export const AuthProvider = ({ children }) => {
       dispatch({ type: "AUTH_LOADING" });
       const response = await authAPI.register(userData);
 
+      // ✅ Set token immediately
+      setAuthToken(response.data.token);
+
       dispatch({
         type: "REGISTER_SUCCESS",
         payload: {
@@ -282,6 +305,11 @@ export const AuthProvider = ({ children }) => {
           user: response.data.data,
         },
       });
+
+      // Now safe to fetch subscription
+      refreshSubscription().catch((err) =>
+        console.warn("Failed to fetch subscription on register:", err)
+      );
 
       return { success: true, message: response.data.message };
     } catch (error) {
@@ -293,8 +321,14 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (credentials) => {
     try {
+      console.log("🔐 AuthContext: Starting login...");
       dispatch({ type: "AUTH_LOADING" });
+
       const response = await authAPI.login(credentials);
+      console.log("🔐 AuthContext: Login API response:", response.data);
+
+      // ✅ Set token immediately in axios before any other calls
+      setAuthToken(response.data.token);
 
       dispatch({
         type: "LOGIN_SUCCESS",
@@ -304,8 +338,16 @@ export const AuthProvider = ({ children }) => {
         },
       });
 
+      console.log("🔐 AuthContext: Login success dispatched");
+
+      // Now safe to fetch subscription - token is already in axios
+      refreshSubscription().catch((err) =>
+        console.warn("Failed to fetch subscription on login:", err)
+      );
+
       return { success: true, message: response.data.message };
     } catch (error) {
+      console.error("🔐 AuthContext: Login error:", error);
       const message = error.response?.data?.message || "Login failed";
       dispatch({ type: "LOGIN_FAIL", payload: message });
       return { success: false, message };
@@ -417,6 +459,130 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ============================================================================
+  // SUBSCRIPTION METHODS
+  // ============================================================================
+
+  const refreshSubscription = async () => {
+    try {
+      dispatch({ type: "SUBSCRIPTION_LOADING" });
+      const response = await subscriptionAPI.getCurrentSubscription();
+      dispatch({
+        type: "SUBSCRIPTION_SUCCESS",
+        payload: response.data.data,
+      });
+      return response.data.data;
+    } catch (error) {
+      console.error("Error refreshing subscription:", error);
+      dispatch({
+        type: "SUBSCRIPTION_ERROR",
+        payload:
+          error.response?.data?.message || "Failed to fetch subscription",
+      });
+      return null;
+    }
+  };
+
+  const getSubscriptionPlans = async () => {
+    try {
+      const response = await subscriptionAPI.getPlans();
+      return response.data.data;
+    } catch (error) {
+      console.error("Error fetching subscription plans:", error);
+      throw error;
+    }
+  };
+
+  const createCheckoutSession = async (planId, billingCycle = "monthly") => {
+    try {
+      const response = await subscriptionAPI.createCheckoutSession(
+        planId,
+        billingCycle
+      );
+      return response.data.data;
+    } catch (error) {
+      console.error("Error creating checkout session:", error);
+      throw error;
+    }
+  };
+
+  const cancelSubscription = async (reason = "", feedback = "") => {
+    try {
+      const response = await subscriptionAPI.cancelSubscription(
+        reason,
+        feedback
+      );
+      await refreshSubscription();
+      return response.data.data;
+    } catch (error) {
+      console.error("Error canceling subscription:", error);
+      throw error;
+    }
+  };
+
+  const reactivateSubscription = async (planId = null) => {
+    try {
+      const response = await subscriptionAPI.reactivateSubscription(planId);
+      await refreshSubscription();
+      return response.data.data;
+    } catch (error) {
+      console.error("Error reactivating subscription:", error);
+      throw error;
+    }
+  };
+
+  const upgradePlan = async (targetPlanId) => {
+    try {
+      const response = await subscriptionAPI.upgradePlan(targetPlanId);
+      await refreshSubscription();
+      return response.data.data;
+    } catch (error) {
+      console.error("Error upgrading plan:", error);
+      throw error;
+    }
+  };
+
+  const downgradePlan = async (targetPlanId) => {
+    try {
+      const response = await subscriptionAPI.downgradePlan(targetPlanId);
+      await refreshSubscription();
+      return response.data.data;
+    } catch (error) {
+      console.error("Error downgrading plan:", error);
+      throw error;
+    }
+  };
+
+  const getInvoices = async (page = 1, limit = 10) => {
+    try {
+      const response = await subscriptionAPI.getInvoices(page, limit);
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching invoices:", error);
+      throw error;
+    }
+  };
+
+  const trackUsage = async (usageType, amount = 1) => {
+    try {
+      const response = await subscriptionAPI.trackUsage(usageType, amount);
+      return response.data.data;
+    } catch (error) {
+      console.error("Error tracking usage:", error);
+      throw error;
+    }
+  };
+
+  const checkFeatureAccess = async (featureName) => {
+    try {
+      const response = await subscriptionAPI.checkFeatureAccess(featureName);
+      return response.data.data;
+    } catch (error) {
+      console.error("Error checking feature access:", error);
+      throw error;
+    }
+  };
+
+  // ============================================================================
   // PERMISSION HELPERS
   // ============================================================================
 
@@ -484,6 +650,10 @@ export const AuthProvider = ({ children }) => {
     dispatch({ type: "CLEAR_ERROR" });
   };
 
+  const clearSubscriptionError = () => {
+    dispatch({ type: "CLEAR_SUBSCRIPTION_ERROR" });
+  };
+
   const refreshPermissions = () => {
     dispatch({ type: "REFRESH_PERMISSIONS" });
   };
@@ -492,7 +662,6 @@ export const AuthProvider = ({ children }) => {
   // EFFECTS
   // ============================================================================
 
-  // Load user on app start
   useEffect(() => {
     const token = getAuthToken();
     if (token) {
@@ -502,24 +671,20 @@ export const AuthProvider = ({ children }) => {
     }
   }, [loadUser]);
 
-  // Listen for unauthorized events
   useEffect(() => {
     const handleUnauthorized = () => {
       dispatch({ type: "LOGOUT" });
     };
-
     window.addEventListener("auth:unauthorized", handleUnauthorized);
     return () =>
       window.removeEventListener("auth:unauthorized", handleUnauthorized);
   }, []);
 
-  // Auto-refresh user data periodically
   useEffect(() => {
     if (state.isAuthenticated && getAuthToken()) {
       const interval = setInterval(() => {
-        loadUser(true); // Silent refresh
-      }, 5 * 60 * 1000); // Every 5 minutes
-
+        loadUser(true);
+      }, 5 * 60 * 1000);
       return () => clearInterval(interval);
     }
   }, [state.isAuthenticated, loadUser]);
@@ -553,6 +718,19 @@ export const AuthProvider = ({ children }) => {
     // Analytics
     getProfileAnalytics,
 
+    // Subscription methods
+    refreshSubscription,
+    getSubscriptionPlans,
+    createCheckoutSession,
+    cancelSubscription,
+    reactivateSubscription,
+    upgradePlan,
+    downgradePlan,
+    getInvoices,
+    trackUsage,
+    checkFeatureAccess,
+    clearSubscriptionError,
+
     // Permission helpers
     hasPermission,
     canAccessRoute,
@@ -585,7 +763,7 @@ export const AuthProvider = ({ children }) => {
 };
 
 // ============================================================================
-// CUSTOM HOOK
+// CUSTOM HOOKS
 // ============================================================================
 
 export const useAuth = () => {
@@ -597,7 +775,7 @@ export const useAuth = () => {
 };
 
 // ============================================================================
-// HOC FOR ROUTE PROTECTION
+// HOC FOR PROTECTED ROUTES
 // ============================================================================
 
 export const withAuth = (WrappedComponent, requiredPermission) => {

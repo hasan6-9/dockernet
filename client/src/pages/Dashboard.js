@@ -1,15 +1,9 @@
-// client/src/pages/Dashboard.js - MVP Testing Version
+// client/src/pages/Dashboard.js - MVP Testing Version (Updated with Subscription Widget)
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
-import {
-  profileAPI,
-  jobAPI,
-  applicationAPI,
-  adminAPI,
-  handleApiError,
-} from "../api";
+import { profileAPI, jobAPI, applicationAPI, adminAPI } from "../api";
 import {
   User,
   Briefcase,
@@ -27,16 +21,21 @@ import {
   Loader,
   AlertCircle,
   LogOut,
+  CreditCard,
 } from "lucide-react";
 
-// ============================================================================
-// MAIN COMPONENT
-// ============================================================================
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user, logout, isJunior, isSenior, isAdmin } = useAuth();
+  const {
+    user,
+    logout,
+    isJunior,
+    isSenior,
+    isAdmin,
+    subscription,
+    subscriptionLoading,
+  } = useAuth();
 
-  // Fetch profile data for all users
   const { data: profileData } = useQuery({
     queryKey: ["profile", "me"],
     queryFn: () => profileAPI.getMe(),
@@ -45,7 +44,6 @@ const Dashboard = () => {
 
   const profile = profileData?.data?.data || profileData?.data || user;
 
-  // Role-specific data fetching
   const { data: myApplicationsData } = useQuery({
     queryKey: ["my-applications", "dashboard"],
     queryFn: () => applicationAPI.getMyApplications({ limit: 5 }),
@@ -159,6 +157,64 @@ const Dashboard = () => {
           )}
         </div>
 
+        {/* SUBSCRIPTION STATUS WIDGET */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <CreditCard className="w-6 h-6 text-blue-600" />
+              <h3 className="text-lg font-semibold text-gray-900">
+                Subscription Status
+              </h3>
+            </div>
+          </div>
+
+          {subscriptionLoading ? (
+            <div className="mt-4 flex items-center justify-center py-6">
+              <Loader className="w-6 h-6 animate-spin text-blue-600" />
+            </div>
+          ) : subscription ? (
+            <div className="mt-4 flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm mb-1">Current Plan</p>
+                <p className="text-2xl font-bold text-blue-600 mb-2">
+                  {subscription.planName}
+                </p>
+                <p className="text-sm text-gray-500">
+                  Renews:{" "}
+                  {new Date(subscription.currentPeriodEnd).toLocaleDateString()}
+                </p>
+              </div>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => navigate("/subscription/status")}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors"
+                >
+                  View Details
+                </button>
+                <button
+                  onClick={() => navigate("/subscription/manage")}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm font-medium transition-colors"
+                >
+                  Manage
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4">
+              <p className="text-gray-600 mb-4">
+                You're currently on the free plan. Upgrade to unlock premium
+                features.
+              </p>
+              <button
+                onClick={() => navigate("/subscription/plans")}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors"
+              >
+                View Plans
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Role-Based Dashboard */}
         {isJunior() && (
           <JuniorDashboard
@@ -244,9 +300,9 @@ const JuniorDashboard = ({
       color: "bg-emerald-600",
     },
     {
-      label: "Search Doctors",
+      label: "View Plans",
       icon: Users,
-      link: "/search",
+      link: "/subscription/plans",
       color: "bg-indigo-600",
     },
   ];
@@ -366,9 +422,9 @@ const JuniorDashboard = ({
             </Link>
           </div>
 
-          {recommendations.length > 0 ? (
+          {jobRecommendationsData?.data?.data?.length > 0 ? (
             <div className="space-y-3">
-              {recommendations.map((job) => (
+              {jobRecommendationsData.data.data.map((job) => (
                 <Link
                   key={job._id}
                   to={`/jobs/${job._id}`}
@@ -473,9 +529,9 @@ const SeniorDashboard = ({
       color: "bg-purple-600",
     },
     {
-      label: "Find Doctors",
+      label: "View Plans",
       icon: Search,
-      link: "/search",
+      link: "/subscription/plans",
       color: "bg-indigo-600",
     },
   ];
@@ -674,34 +730,6 @@ const AdminDashboard = ({ adminDashboardData, pendingVerificationsData }) => {
     },
   ];
 
-  const quickActions = [
-    {
-      label: "Verification Dashboard",
-      icon: Shield,
-      link: "/admin",
-      color: "bg-red-600",
-      badge: pendingCount > 0 ? pendingCount : null,
-    },
-    {
-      label: "User Management",
-      icon: Users,
-      link: "/admin/users",
-      color: "bg-blue-600",
-    },
-    {
-      label: "Platform Analytics",
-      icon: TrendingUp,
-      link: "/admin/analytics",
-      color: "bg-green-600",
-    },
-    {
-      label: "Job Moderation",
-      icon: Briefcase,
-      link: "/admin/jobs",
-      color: "bg-purple-600",
-    },
-  ];
-
   return (
     <div className="space-y-8">
       {/* Stats Grid */}
@@ -738,32 +766,6 @@ const AdminDashboard = ({ adminDashboardData, pendingVerificationsData }) => {
         })}
       </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {quickActions.map((action, idx) => {
-          const Icon = action.icon;
-          return (
-            <Link
-              key={idx}
-              to={action.link}
-              className={`${action.color} text-white rounded-xl p-6 hover:opacity-90 transition-opacity group relative`}
-            >
-              {action.badge && (
-                <div className="absolute top-3 right-3 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-xs font-bold">
-                  {action.badge}
-                </div>
-              )}
-              <Icon className="w-8 h-8 mb-3" />
-              <h3 className="font-semibold text-lg mb-1">{action.label}</h3>
-              <div className="flex items-center text-sm opacity-90">
-                <span>Go now</span>
-                <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
-              </div>
-            </Link>
-          );
-        })}
-      </div>
-
       {/* Pending Verification Queue */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4">
@@ -780,9 +782,9 @@ const AdminDashboard = ({ adminDashboardData, pendingVerificationsData }) => {
 
         {pending.length > 0 ? (
           <div className="space-y-3">
-            {pending.map((user) => (
+            {pending.map((userItem) => (
               <Link
-                key={user._id}
+                key={userItem._id}
                 to="/admin"
                 className="block p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all"
               >
@@ -793,22 +795,22 @@ const AdminDashboard = ({ adminDashboardData, pendingVerificationsData }) => {
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-900">
-                        Dr. {user.firstName} {user.lastName}
+                        Dr. {userItem.firstName} {userItem.lastName}
                       </h4>
                       <p className="text-sm text-gray-600">
-                        {user.primarySpecialty}
+                        {userItem.primarySpecialty}
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
                     <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full">
-                      {user.verificationStatus?.identity === "pending" &&
+                      {userItem.verificationStatus?.identity === "pending" &&
                         "ID Pending"}
-                      {user.verificationStatus?.medical_license === "pending" &&
-                        "License Pending"}
+                      {userItem.verificationStatus?.medical_license ===
+                        "pending" && "License Pending"}
                     </span>
                     <p className="text-xs text-gray-500 mt-1">
-                      {new Date(user.createdAt).toLocaleDateString()}
+                      {new Date(userItem.createdAt).toLocaleDateString()}
                     </p>
                   </div>
                 </div>

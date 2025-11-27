@@ -1,10 +1,11 @@
+// client/src/components/ProtectedRoute.js (Optional Feature Gating)
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import LoadingSpinner from "./common/LoadingSpinner";
 
 const AccessDenied = ({ reason, requiredLevel, currentStatus }) => (
-  <div className="min-h-screen flex items-center justify-center bg-gray-50">
+  <div className="min-h-screen flex items-center justify-center">
     <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-8">
       <div className="text-center">
         <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
@@ -52,11 +53,12 @@ const AccessDenied = ({ reason, requiredLevel, currentStatus }) => (
           >
             Go to Dashboard
           </a>
+
           <a
-            href="/profile"
+            href="/subscription/plans"
             className="block w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors font-medium"
           >
-            Complete Your Profile
+            View Plans
           </a>
         </div>
       </div>
@@ -66,17 +68,41 @@ const AccessDenied = ({ reason, requiredLevel, currentStatus }) => (
 
 const ProtectedRoute = ({
   children,
-  allowedRoles = null,
+  roles = null,
   requiredPermission = null,
   requireVerified = false,
   requireActive = false,
+  featureRequired = null,
   redirectTo = "/login",
 }) => {
   const location = useLocation();
   const auth = useAuth();
+  const [featureLoading, setFeatureLoading] = React.useState(
+    featureRequired ? true : false
+  );
+  const [featureGranted, setFeatureGranted] = React.useState(true);
 
-  // Show loading spinner while checking authentication
-  if (auth.loading) {
+  // Check feature access if required
+  React.useEffect(() => {
+    if (!featureRequired) return;
+
+    const checkFeature = async () => {
+      try {
+        setFeatureLoading(true);
+        const result = await auth.checkFeatureAccess(featureRequired);
+        setFeatureGranted(result.hasAccess);
+      } catch (err) {
+        console.error("Error checking feature access:", err);
+        setFeatureGranted(false);
+      } finally {
+        setFeatureLoading(false);
+      }
+    };
+
+    checkFeature();
+  }, [featureRequired, auth]);
+
+  if (auth.loading || (featureRequired && featureLoading)) {
     return <LoadingSpinner message="Checking credentials..." />;
   }
 
@@ -86,14 +112,14 @@ const ProtectedRoute = ({
   }
 
   // Check 2: Role-based access control
-  if (allowedRoles && allowedRoles.length > 0) {
-    if (!allowedRoles.includes(auth.role)) {
+  if (roles && roles.length > 0) {
+    if (!roles.includes(auth.role)) {
       return (
         <AccessDenied
-          reason={`This page is only accessible to ${allowedRoles.join(
+          reason={`This page is only accessible to ${roles.join(
             " or "
           )} users.`}
-          requiredLevel={allowedRoles.join(", ")}
+          requiredLevel={roles.join(", ")}
           currentStatus={auth.role}
         />
       );
@@ -143,7 +169,18 @@ const ProtectedRoute = ({
     );
   }
 
-  // Check 5: Permission-based access control
+  // Check 5: Feature access
+  if (featureRequired && !featureGranted) {
+    return (
+      <AccessDenied
+        reason={`This feature is not available in your plan. Upgrade to access it.`}
+        requiredLevel={`${featureRequired} feature`}
+        currentStatus={auth.subscription?.planName || "Free"}
+      />
+    );
+  }
+
+  // Check 6: Permission-based access control
   if (requiredPermission && !auth.canAccessRoute(requiredPermission)) {
     let reason = `This feature requires ${requiredPermission} level access.`;
     let suggestions = [];
@@ -224,7 +261,7 @@ const ProtectedRoute = ({
             <div className="mt-6 space-y-3">
               {requiredPermission === "premium" ? (
                 <a
-                  href="/pricing"
+                  href="/subscription/plans"
                   className="block w-full px-4 py-2 bg-[#3B82F6] text-white rounded-md hover:bg-blue-600 transition-colors font-medium"
                 >
                   View Pricing Plans
@@ -237,6 +274,7 @@ const ProtectedRoute = ({
                   Complete Profile
                 </a>
               )}
+
               <a
                 href="/dashboard"
                 className="block w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors font-medium"
@@ -279,6 +317,33 @@ export const RequireRole = ({ roles, children, fallback = null }) => {
   if (!roles.includes(auth.role)) {
     return fallback;
   }
+  return <>{children}</>;
+};
+
+export const RequireFeature = ({ feature, children, fallback = null }) => {
+  const auth = useAuth();
+  const [hasAccess, setHasAccess] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const checkAccess = async () => {
+      try {
+        setLoading(true);
+        const result = await auth.checkFeatureAccess(feature);
+        setHasAccess(result.hasAccess);
+      } catch (err) {
+        console.error("Error checking feature access:", err);
+        setHasAccess(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkAccess();
+  }, [feature, auth]);
+
+  if (loading) return null;
+  if (!hasAccess) return fallback;
   return <>{children}</>;
 };
 

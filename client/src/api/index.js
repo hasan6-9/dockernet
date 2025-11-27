@@ -1,4 +1,4 @@
-// client/src/api/index.js - Consolidated API Service Layer
+// client/src/api/index.js - Consolidated API Service Layer (Updated with Subscriptions)
 import axios from "axios";
 
 // ============================================================================
@@ -59,8 +59,6 @@ api.interceptors.response.use(
         response.data
       );
     }
-    // ✅ FIX: Don't double-wrap the response
-    // Backend already returns { success: true, data: {...} }
     return response;
   },
   (error) => {
@@ -101,6 +99,69 @@ api.interceptors.response.use(
 );
 
 // ============================================================================
+// SUBSCRIPTION API
+// ============================================================================
+export const subscriptionAPI = {
+  // Get all available plans (public)
+  getPlans: () => api.get("/subscriptions/plans"),
+
+  // Create checkout session for payment
+  createCheckoutSession: (planId, billingCycle = "monthly") =>
+    api.post("/subscriptions/create-checkout-session", {
+      planId,
+      billingCycle,
+    }),
+
+  // Get current user's subscription
+  getCurrentSubscription: () => api.get("/subscriptions/current"),
+
+  // Cancel active subscription
+  cancelSubscription: (reason = "", feedback = "") =>
+    api.post("/subscriptions/cancel", {
+      reason,
+      feedback,
+    }),
+
+  // Reactivate canceled subscription
+  reactivateSubscription: (planId = null) =>
+    api.post("/subscriptions/reactivate", {
+      ...(planId && { planId }),
+    }),
+
+  // Get update payment method setup intent
+  updatePaymentMethod: () => api.post("/subscriptions/update-payment-method"),
+
+  // Get subscription invoices/payment history
+  getInvoices: (page = 1, limit = 10) =>
+    api.get("/subscriptions/invoices", {
+      params: { page, limit },
+    }),
+
+  // Upgrade to higher tier plan
+  upgradePlan: (targetPlanId) =>
+    api.post("/subscriptions/upgrade", {
+      targetPlanId,
+    }),
+
+  // Downgrade to lower tier plan
+  downgradePlan: (targetPlanId) =>
+    api.post("/subscriptions/downgrade", {
+      targetPlanId,
+    }),
+
+  // Track usage of limited features
+  trackUsage: (usageType, amount = 1) =>
+    api.post("/subscriptions/track-usage", {
+      usageType,
+      amount,
+    }),
+
+  // Check if feature is accessible in current plan
+  checkFeatureAccess: (featureName) =>
+    api.get(`/subscriptions/feature/${featureName}`),
+};
+
+// ============================================================================
 // AUTHENTICATION API
 // ============================================================================
 export const authAPI = {
@@ -136,21 +197,14 @@ export const authAPI = {
 };
 
 // ============================================================================
-// PROFILE MANAGEMENT API - FIXED
+// PROFILE MANAGEMENT API
 // ============================================================================
 export const profileAPI = {
-  // ✅ FIX: Correct endpoint for getting own profile
   getMyProfile: () => api.get("/profile/me"),
-
-  // ✅ ADDED: Alias for compatibility
   getMe: () => api.get("/profile/me"),
-
   getPublicProfile: (identifier) => api.get(`/profile/${identifier}`),
-
-  // Update profile
   updateBasic: (profileData) => api.put("/profile/basic", profileData),
 
-  // Photo upload
   uploadPhoto: (photoFile, onProgress) => {
     const formData = new FormData();
     formData.append("profilePhoto", photoFile);
@@ -168,14 +222,12 @@ export const profileAPI = {
     });
   },
 
-  // Documents upload
   uploadDocuments: (files, documentTypes, onProgress) => {
     const formData = new FormData();
     files.forEach((file) => {
       formData.append("documents", file);
     });
 
-    // Append document types as array
     if (documentTypes && documentTypes.length > 0) {
       documentTypes.forEach((type) => {
         formData.append("documentTypes", type);
@@ -198,7 +250,6 @@ export const profileAPI = {
   deleteDocument: (documentId) =>
     api.delete(`/profile/documents/${documentId}`),
 
-  // Experience management
   addExperience: (experienceData) =>
     api.post("/profile/experience", experienceData),
   updateExperience: (experienceId, experienceData) =>
@@ -206,10 +257,8 @@ export const profileAPI = {
   deleteExperience: (experienceId) =>
     api.delete(`/profile/experience/${experienceId}`),
 
-  // Skills management
   updateSkills: (skillsData) => api.put("/profile/skills", skillsData),
 
-  // Certifications
   addCertification: (certificationData) =>
     api.post("/profile/certifications", certificationData),
   updateCertification: (certificationId, certificationData) =>
@@ -217,12 +266,10 @@ export const profileAPI = {
   deleteCertification: (certificationId) =>
     api.delete(`/profile/certifications/${certificationId}`),
 
-  // Availability & Privacy
   updateAvailability: (availabilityData) =>
     api.put("/profile/availability", availabilityData),
   updatePrivacy: (privacyData) => api.put("/profile/privacy", privacyData),
 
-  // Search & Analytics
   search: (params) => {
     const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
@@ -241,32 +288,26 @@ export const profileAPI = {
 // ============================================================================
 
 export const jobAPI = {
-  // Job CRUD
   create: (jobData) => api.post("/jobs/create", jobData),
   update: (jobId, jobData) => api.put(`/jobs/${jobId}/update`, jobData),
   delete: (jobId) => api.delete(`/jobs/${jobId}`),
   getById: (jobId) => api.get(`/jobs/${jobId}`),
 
-  // Job discovery
   browse: (params = {}) => api.get("/jobs/browse", { params }),
   search: (params = {}) => api.get("/jobs/search", { params }),
   getMyJobs: (params = {}) => api.get("/jobs/my-jobs", { params }),
   getRecommendations: (params = {}) =>
     api.get("/jobs/recommendations", { params }),
 
-  // Job status management
   pause: (jobId) => api.put(`/jobs/${jobId}/pause`),
   activate: (jobId) => api.put(`/jobs/${jobId}/activate`),
 
-  // Job analytics
   getAnalytics: (jobId) => api.get(`/jobs/${jobId}/analytics`),
   trackView: (jobId) => api.post(`/jobs/${jobId}/view`),
 
-  // Job applications
   getApplications: (jobId, params = {}) =>
     api.get(`/jobs/${jobId}/applications`, { params }),
 
-  // Metadata
   getCategories: () => api.get("/jobs/categories"),
   getTrending: () => api.get("/jobs/trending"),
   getStatistics: (params = {}) => api.get("/jobs/statistics", { params }),
@@ -277,27 +318,22 @@ export const jobAPI = {
 // ============================================================================
 
 export const applicationAPI = {
-  // Application submission
   submit: (applicationData) =>
     api.post("/applications/submit", applicationData),
 
-  // Application management
   getMyApplications: (params = {}) =>
     api.get("/applications/my-apps", { params }),
   getReceived: (params = {}) => api.get("/applications/received", { params }),
   getById: (applicationId) => api.get(`/applications/${applicationId}`),
 
-  // Status updates
   updateStatus: (applicationId, status) =>
     api.put(`/applications/${applicationId}/status`, { status }),
   withdraw: (applicationId) =>
     api.put(`/applications/${applicationId}/withdraw`),
 
-  // Communication
   sendMessage: (applicationId, content) =>
     api.post(`/applications/${applicationId}/message`, { content }),
 
-  // Interview & actions
   scheduleInterview: (applicationId, interviewData) =>
     api.post(`/applications/${applicationId}/interview`, interviewData),
   accept: (applicationId, contractDetails) =>
@@ -305,11 +341,9 @@ export const applicationAPI = {
   reject: (applicationId, reason) =>
     api.put(`/applications/${applicationId}/reject`, { reason }),
 
-  // Rating
   rate: (applicationId, rating, review) =>
     api.post(`/applications/${applicationId}/rate`, { rating, review }),
 
-  // Bulk operations
   bulkWithdraw: (applicationIds) =>
     api.post("/applications/bulk/withdraw", { applicationIds }),
 };
@@ -319,12 +353,10 @@ export const applicationAPI = {
 // ============================================================================
 
 export const adminAPI = {
-  // Dashboard
   getDashboard: () => api.get("/admin/dashboard"),
   getVerificationStats: (timeframe = "30d") =>
     api.get(`/admin/verification/stats?timeframe=${timeframe}`),
 
-  // Verification management
   getPendingVerifications: (params = {}) => {
     const queryParams = new URLSearchParams();
     if (params.type) queryParams.append("type", params.type);
@@ -340,7 +372,6 @@ export const adminAPI = {
   getProfileForVerification: (userId) =>
     api.get(`/admin/verification/profile/${userId}`),
 
-  // Individual verifications
   verifyIdentity: (userId, verificationData) =>
     api.put(`/admin/verification/identity/${userId}`, verificationData),
   verifyMedicalLicense: (userId, verificationData) =>
@@ -348,7 +379,6 @@ export const adminAPI = {
   verifyBackgroundCheck: (userId, verificationData) =>
     api.put(`/admin/verification/background-check/${userId}`, verificationData),
 
-  // Bulk operations
   bulkVerification: (bulkData) => api.put("/admin/verification/bulk", bulkData),
 };
 
@@ -448,7 +478,7 @@ export const validateFile = (
 
 export const validateImage = (file) => {
   const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-  const maxSize = 5 * 1024 * 1024; // 5MB
+  const maxSize = 5 * 1024 * 1024;
   return validateFile(file, maxSize, allowedTypes);
 };
 
@@ -461,7 +491,7 @@ export const validateDocument = (file) => {
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ];
-  const maxSize = 10 * 1024 * 1024; // 10MB
+  const maxSize = 10 * 1024 * 1024;
   return validateFile(file, maxSize, allowedTypes);
 };
 
@@ -470,7 +500,6 @@ export const validateDocument = (file) => {
 // ============================================================================
 
 export const formatters = {
-  // Format budget display
   budget: (job) => {
     const { budget, budgetType } = job;
     if (!budget) return "Negotiable";
@@ -483,7 +512,6 @@ export const formatters = {
     return `$${budget.amount?.toLocaleString() || "Negotiable"}`;
   },
 
-  // Get status color
   statusColor: (status) => {
     const colors = {
       active: "text-green-600 bg-green-100",
@@ -501,7 +529,6 @@ export const formatters = {
     return colors[status] || colors.pending;
   },
 
-  // Format date
   date: (dateString) => {
     if (!dateString) return "";
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -511,7 +538,6 @@ export const formatters = {
     });
   },
 
-  // Calculate days until deadline
   daysUntilDeadline: (deadline) => {
     const now = new Date();
     const deadlineDate = new Date(deadline);
@@ -521,5 +547,4 @@ export const formatters = {
   },
 };
 
-// Export default API instance
 export default api;

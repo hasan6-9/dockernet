@@ -27,6 +27,13 @@ import JobDetails from "./pages/JobDetails";
 import ApplicationSubmission from "./pages/ApplicationSubmission";
 import ApplicationTracking from "./pages/ApplicationTracking";
 
+// Import subscription pages
+import SubscriptionPlans from "./pages/SubscriptionPlans";
+import SubscriptionStatus from "./pages/SubscriptionStatus";
+import ManageSubscription from "./pages/ManageSubscription";
+import CheckoutSuccess from "./pages/CheckoutSuccess";
+import CheckoutCancel from "./pages/CheckoutCancel";
+
 // ErrorBoundary component
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -105,27 +112,11 @@ const NavBar = () => {
             >
               Search Doctors
             </Link>
-            {user?.role === "senior" && (
-              <Link
-                to="/jobs"
-                className="text-slate-600 hover:text-blue-600 font-medium transition-colors"
-              >
-                My Jobs
-              </Link>
-            )}
-            {user?.role === "junior" && (
-              <Link
-                to="/jobs"
-                className="text-slate-600 hover:text-blue-600 font-medium transition-colors"
-              >
-                Opportunities
-              </Link>
-            )}
             <Link
-              to="/messages"
+              to="/subscription/status"
               className="text-slate-600 hover:text-blue-600 font-medium transition-colors"
             >
-              Messages
+              Subscription
             </Link>
             {user?.role === "admin" && (
               <Link
@@ -188,7 +179,7 @@ const Breadcrumb = () => {
                 to={`/${paths.slice(0, index + 1).join("/")}`}
                 className="capitalize hover:text-blue-600"
               >
-                {path}
+                {path.replace("-", " ")}
               </Link>
             </React.Fragment>
           ))}
@@ -209,75 +200,17 @@ const ProtectedLayout = () => (
   </>
 );
 
-// Jobs Placeholder
-const JobsPlaceholder = () => (
-  <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
-    <div className="text-center">
-      <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-        <svg
-          className="w-8 h-8 text-white"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2"
-            d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2-2v2m8 0V6a2 2 0 00-2 2h-4a2 2 0 00-2-2V4"
-          />
-        </svg>
-      </div>
-      <h2 className="text-2xl font-bold text-slate-900 mb-2">
-        Job System Coming Soon
-      </h2>
-      <p className="text-slate-600">
-        Advanced job posting and application system is in development.
-      </p>
-    </div>
-  </div>
-);
-
-// Messages Placeholder
-const MessagesPlaceholder = () => (
-  <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
-    <div className="text-center">
-      <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-        <svg
-          className="w-8 h-8 text-white"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2"
-            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-          />
-        </svg>
-      </div>
-      <h2 className="text-2xl font-bold text-slate-900 mb-2">
-        Messaging System Coming Soon
-      </h2>
-      <p className="text-slate-600">
-        Real-time messaging and communication features are in development.
-      </p>
-    </div>
-  </div>
-);
-
 // AppContent component to handle auth logic
 const AppContent = () => {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  // ✅ FIX: Use 'loading' instead of 'isLoading' to match AuthContext
+  const { isAuthenticated, loading, user } = useAuth();
   const location = useLocation();
 
   useEffect(() => {
-    // Analytics tracking
     console.log(`Page view tracked: ${location.pathname}${location.search}`);
   }, [location]);
 
-  if (isLoading) {
+  if (loading) {
     return <Loader />;
   }
 
@@ -298,6 +231,36 @@ const AppContent = () => {
         }
       />
       <Route path="/search" element={<DoctorSearch />} />
+
+      {/* Subscription Routes (Protected) */}
+      <Route
+        path="/subscription/plans"
+        element={
+          <ProtectedRoute>
+            <SubscriptionPlans />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/subscription/status"
+        element={
+          <ProtectedRoute>
+            <SubscriptionStatus />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/subscription/manage"
+        element={
+          <ProtectedRoute>
+            <ManageSubscription />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Checkout Routes (Can be public for Stripe redirect) */}
+      <Route path="/subscription/success" element={<CheckoutSuccess />} />
+      <Route path="/subscription/cancel" element={<CheckoutCancel />} />
 
       {/* Protected Routes with Layout */}
       <Route element={<ProtectedLayout />}>
@@ -331,7 +294,7 @@ const AppContent = () => {
           }
         />
 
-        {/* Admin Only - Fixed syntax */}
+        {/* Admin Only */}
         <Route
           path="/admin"
           element={
@@ -389,17 +352,7 @@ const AppContent = () => {
           }
         />
 
-        {/* Messages - Verified Required */}
-        <Route
-          path="/messages"
-          element={
-            <ProtectedRoute requireVerifiedAccount={true}>
-              <MessagesPlaceholder />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Admin Routes - All require admin access */}
+        {/* Admin Routes */}
         <Route
           path="/admin/verifications"
           element={
@@ -418,14 +371,6 @@ const AppContent = () => {
         />
         <Route
           path="/admin/analytics"
-          element={
-            <ProtectedRoute requireAdmin={true}>
-              <AdminDashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/support"
           element={
             <ProtectedRoute requireAdmin={true}>
               <AdminDashboard />
