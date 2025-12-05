@@ -1,4 +1,4 @@
-// server/models/Subscription.js - Complete Subscription Management Schema
+// server/models/Subscription.js - FIXED VERSION
 const mongoose = require("mongoose");
 
 const InvoiceSchema = new mongoose.Schema(
@@ -55,7 +55,6 @@ const SubscriptionSchema = new mongoose.Schema(
     stripeCustomerId: {
       type: String,
       required: [true, "Stripe Customer ID is required"],
-      unique: true,
       index: true,
     },
 
@@ -161,11 +160,11 @@ const SubscriptionSchema = new mongoose.Schema(
 
     // Payment Information
     paymentMethod: {
-      brand: String, // visa, mastercard, etc.
+      brand: String,
       last4: String,
       expMonth: Number,
       expYear: Number,
-      fingerprint: String, // Stripe fingerprint for duplicate detection
+      fingerprint: String,
       stripePaymentMethodId: String,
     },
 
@@ -186,12 +185,14 @@ const SubscriptionSchema = new mongoose.Schema(
       country: String,
     },
 
-    // Invoice History
-    invoices: [InvoiceSchema],
+    // Invoice History - FIX: Add default empty array
+    invoices: {
+      type: [InvoiceSchema],
+      default: [],
+    },
 
     // Usage Tracking
     usage: {
-      // For metered billing in future
       jobApplications: {
         limit: Number,
         used: { type: Number, default: 0 },
@@ -246,7 +247,7 @@ const SubscriptionSchema = new mongoose.Schema(
     cancelationFeedback: String,
     cancelationSurveyResponse: String,
     cancelationDate: Date,
-    willCancelAt: Date, // For scheduled cancellations
+    willCancelAt: Date,
     canReactivate: {
       type: Boolean,
       default: true,
@@ -265,7 +266,7 @@ const SubscriptionSchema = new mongoose.Schema(
 
     // Metadata
     metadata: {
-      source: String, // 'web', 'mobile', 'api'
+      source: String,
       campaignId: String,
       couponCode: String,
       discountAmount: { type: Number, default: 0 },
@@ -386,13 +387,11 @@ SubscriptionSchema.methods.trackUsage = async function (usageType, amount = 1) {
 
   this.usage[usageType].used += amount;
 
-  // Check if limit exceeded
   if (
     this.usage[usageType].limit &&
     this.usage[usageType].used > this.usage[usageType].limit
   ) {
     this.usage[usageType].used = this.usage[usageType].limit;
-    // Could trigger notification here
   }
 
   await this.save();
@@ -414,7 +413,6 @@ SubscriptionSchema.methods.addInvoice = function (invoiceData) {
     receiptUrl: invoiceData.receipt_number,
   };
 
-  // Check for duplicate
   const exists = this.invoices.some(
     (inv) => inv.stripeInvoiceId === invoice.stripeInvoiceId
   );
@@ -425,8 +423,16 @@ SubscriptionSchema.methods.addInvoice = function (invoiceData) {
   return this.save();
 };
 
+// FIX: Safe getLastInvoice method
 SubscriptionSchema.methods.getLastInvoice = function () {
-  if (this.invoices.length === 0) return null;
+  // Check if invoices exists and is an array with length
+  if (
+    !this.invoices ||
+    !Array.isArray(this.invoices) ||
+    this.invoices.length === 0
+  ) {
+    return null;
+  }
   return this.invoices[this.invoices.length - 1];
 };
 
@@ -441,14 +447,14 @@ SubscriptionSchema.methods.canUpgradeTo = function (targetPlanId) {
 };
 
 SubscriptionSchema.methods.getUpgradeProration = function (newPlanPrice) {
-  // Calculate prorated amount for mid-cycle upgrades
   const daysRemaining = this.daysUntilRenewal;
-  const dailyRate = this.planPrice / 30; // Simplified: assume 30-day month
+  const dailyRate = this.planPrice / 30;
   const prorationCredit = dailyRate * daysRemaining;
   const upgradeCost = newPlanPrice - this.planPrice;
   return upgradeCost - prorationCredit;
 };
 
+// FIX: Enhanced formatForResponse
 SubscriptionSchema.methods.formatForResponse = function () {
   return {
     id: this._id,
@@ -469,7 +475,7 @@ SubscriptionSchema.methods.formatForResponse = function () {
     paymentMethod: this.paymentMethod,
     features: this.features,
     usage: this.usage,
-    lastInvoice: this.getLastInvoice(),
+    lastInvoice: this.getLastInvoice() || null, // Safe fallback
     canceledAt: this.canceledAt,
     trialEnd: this.trialEnd,
     trialEndsInDays: this.trialEndsInDays,
@@ -489,6 +495,11 @@ SubscriptionSchema.pre("save", function (next) {
       end.setMonth(end.getMonth() + 1);
     }
     this.currentPeriodEnd = end;
+  }
+
+  // FIX: Ensure invoices is always an array
+  if (!this.invoices) {
+    this.invoices = [];
   }
 
   next();

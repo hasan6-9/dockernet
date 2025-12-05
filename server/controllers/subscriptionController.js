@@ -142,62 +142,14 @@ exports.createCheckoutSession = async (req, res) => {
     const { planId, billingCycle = "monthly" } = req.body;
     const user = req.user;
 
+    console.log(`Creating checkout for plan: ${planId}, user: ${user._id}`);
+
     // Validate plan
     if (!PLANS[planId]) {
       return res.status(400).json({
         success: false,
         message: "Invalid plan selected",
         validPlans: Object.keys(PLANS),
-      });
-    }
-
-    // Check if user already has active subscription
-    let subscription = await Subscription.findOne({
-      userId: user._id,
-      status: { $in: ["active", "trialing"] },
-    });
-
-    if (subscription && subscription.planId === planId) {
-      return res.status(400).json({
-        success: false,
-        message: "You already have this plan active",
-      });
-    }
-
-    // Get or create Stripe customer
-    let stripeCustomerId = subscription?.stripeCustomerId;
-
-    if (!stripeCustomerId) {
-      const customer = await stripe.customers.create({
-        email: user.email,
-        name: `${user.firstName} ${user.lastName}`,
-        metadata: {
-          userId: user._id.toString(),
-          role: user.role,
-        },
-      });
-      stripeCustomerId = customer.id;
-
-      // Create free subscription record if it doesn't exist
-      if (!subscription) {
-        subscription = await Subscription.create({
-          userId: user._id,
-          stripeCustomerId,
-          planId: "free",
-          planName: "Free Tier",
-          status: "free",
-          billingEmail: user.email,
-          currentPeriodStart: new Date(),
-          currentPeriodEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-        });
-      }
-    }
-
-    // If upgrading/downgrading, update customer
-    if (subscription.stripeCustomerId !== stripeCustomerId) {
-      await stripe.customers.update(stripeCustomerId, {
-        email: user.email,
-        name: `${user.firstName} ${user.lastName}`,
       });
     }
 
@@ -210,19 +162,98 @@ exports.createCheckoutSession = async (req, res) => {
       });
     }
 
-    // Get appropriate price ID
+    // Find existing subscription
+    let subscription = await Subscription.findOne({
+      userId: user._id,
+    });
+
+    console.log(`Existing subscription found:`, subscription ? "Yes" : "No");
+
+    // Check if user already has this plan active
+    if (
+      subscription &&
+      subscription.planId === planId &&
+      subscription.isActive
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "You already have this plan active",
+      });
+    }
+
+    // Get or create Stripe customer
+    let stripeCustomerId = subscription?.stripeCustomerId;
+
+    if (!stripeCustomerId) {
+      console.log("Creating new Stripe customer...");
+      const customer = await stripe.customers.create({
+        email: user.email,
+        name: `${user.firstName} ${user.lastName}`,
+        metadata: {
+          userId: user._id.toString(),
+          role: user.role,
+        },
+      });
+      stripeCustomerId = customer.id;
+      console.log(`Created Stripe customer: ${stripeCustomerId}`);
+    } else {
+      console.log(`Using existing Stripe customer: ${stripeCustomerId}`);
+    }
+
+    // Create or update subscription record
+    if (!subscription) {
+      console.log("Creating new subscription record...");
+      subscription = await Subscription.findOneAndUpdate(
+        { userId: user._id },
+        {
+          $setOnInsert: {
+            userId: user._id,
+            stripeCustomerId,
+            planId: "free",
+            planName: "Free Tier",
+            status: "free",
+            billingEmail: user.email,
+            currentPeriodStart: new Date(),
+            currentPeriodEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+            invoices: [],
+          },
+        },
+        {
+          upsert: true,
+          new: true,
+          setDefaultsOnInsert: true,
+        }
+      );
+      console.log("Subscription record created");
+    } else if (subscription.stripeCustomerId !== stripeCustomerId) {
+      console.log("Updating subscription with Stripe customer ID...");
+      subscription.stripeCustomerId = stripeCustomerId;
+      await subscription.save();
+    }
+
+    // Get plan details
     const plan = PLANS[planId];
     let priceId = plan.stripePriceId;
 
     if (!priceId) {
+      console.error(`Missing Stripe price ID for plan: ${planId}`);
       return res.status(500).json({
         success: false,
-        message: "Plan price not configured",
+        message: `Plan price not configured for ${planId}. Please contact support.`,
       });
     }
 
-    // Create checkout session
-    const session = await stripe.checkout.sessions.create({
+    console.log(`Using Stripe price ID: ${priceId}`);
+
+    // Determine if user gets trial
+    const shouldGetTrial =
+      !subscription.hasTrialUsed &&
+      (subscription.planId === "free" || !subscription.planId);
+
+    console.log(`Trial eligibility: ${shouldGetTrial}`);
+
+    // Build checkout session config
+    const sessionConfig = {
       customer: stripeCustomerId,
       payment_method_types: ["card"],
       line_items: [
@@ -233,23 +264,34 @@ exports.createCheckoutSession = async (req, res) => {
       ],
       mode: "subscription",
       success_url: `${process.env.CLIENT_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.CLIENT_URL}/subscription/plans`,
+      cancel_url: `${process.env.CLIENT_URL}/subscription/cancel`,
       subscription_data: {
         metadata: {
           userId: user._id.toString(),
           planId,
         },
-        // Optional: trial period for first-time subscribers
-        trial_period_days:
-          !subscription || subscription.planId === "free" ? 7 : 0,
+        trial_period_days: shouldGetTrial ? 7 : 0,
       },
-      customer_email: user.email,
       billing_address_collection: "required",
-      // Tax configuration (optional)
-      automatic_tax: {
-        enabled: true,
-      },
-    });
+    };
+
+    // Conditionally enable automatic tax (configurable via env)
+    const enableAutomaticTax = process.env.STRIPE_ENABLE_TAX === "true";
+
+    if (enableAutomaticTax) {
+      console.log("✅ Automatic tax enabled");
+      sessionConfig.automatic_tax = { enabled: true };
+    } else {
+      console.log(
+        "ℹ️  Automatic tax disabled (configure STRIPE_ENABLE_TAX=true to enable)"
+      );
+    }
+
+    console.log("Creating Stripe checkout session...");
+    const session = await stripe.checkout.sessions.create(sessionConfig);
+
+    console.log(`✅ Checkout session created: ${session.id}`);
+    console.log(`✅ Checkout URL: ${session.url}`);
 
     res.status(200).json({
       success: true,
@@ -260,13 +302,21 @@ exports.createCheckoutSession = async (req, res) => {
         planName: plan.name,
         amount: plan.price,
         billingCycle,
+        trialDays: shouldGetTrial ? 7 : 0,
       },
     });
   } catch (error) {
-    console.error("Stripe checkout error:", error);
+    console.error("❌ Stripe checkout error:", error.message);
+
+    // Better error handling for Stripe errors
+    const errorMessage =
+      error.type === "StripeInvalidRequestError"
+        ? `Stripe configuration error: ${error.message}`
+        : "Error creating checkout session";
+
     res.status(500).json({
       success: false,
-      message: "Error creating checkout session",
+      message: errorMessage,
       error: error.message,
     });
   }
@@ -347,17 +397,29 @@ exports.getCurrentSubscription = async (req, res) => {
       userId: req.user._id,
     }).select("-invoices");
 
-    // If no subscription, create free tier
+    // If no subscription, create free tier with findOneAndUpdate
     if (!subscription) {
-      subscription = await Subscription.create({
-        userId: req.user._id,
-        planId: "free",
-        planName: "Free Tier",
-        status: "free",
-        billingEmail: req.user.email,
-        currentPeriodStart: new Date(),
-        currentPeriodEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-      });
+      subscription = await Subscription.findOneAndUpdate(
+        { userId: req.user._id },
+        {
+          $setOnInsert: {
+            userId: req.user._id,
+            stripeCustomerId: `temp_${req.user._id}`, // Temporary ID
+            planId: "free",
+            planName: "Free Tier",
+            status: "free",
+            billingEmail: req.user.email,
+            currentPeriodStart: new Date(),
+            currentPeriodEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+            invoices: [], // Initialize with empty array
+          },
+        },
+        {
+          upsert: true,
+          new: true,
+          setDefaultsOnInsert: true,
+        }
+      );
     }
 
     res.status(200).json({
