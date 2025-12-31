@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const Subscription = require("../models/Subscription");
 
 // Protect routes - verify JWT token
 exports.protect = async (req, res, next) => {
@@ -51,6 +52,64 @@ exports.protect = async (req, res, next) => {
         success: false,
         message: "User account has been deactivated or suspended",
       });
+    }
+
+    // ✅ NEW: Attach subscription data to user object
+    try {
+      const subscription = await Subscription.findOne({ userId: user._id });
+
+      // If no subscription exists, create a free tier subscription
+      if (!subscription) {
+        const newSubscription = await Subscription.findOneAndUpdate(
+          { userId: user._id },
+          {
+            $setOnInsert: {
+              userId: user._id,
+              stripeCustomerId: `temp_${user._id}`,
+              planId: "free",
+              planName: "Free Tier",
+              status: "free",
+              billingEmail: user.email,
+              currentPeriodStart: new Date(),
+              currentPeriodEnd: new Date(
+                Date.now() + 365 * 24 * 60 * 60 * 1000
+              ),
+              features: {
+                unlimitedApplications: false,
+                advancedSearch: false,
+                featuredJobPostings: false,
+                directMessaging: false,
+                advancedAnalytics: false,
+                prioritySupport: false,
+                customBranding: false,
+                apiAccess: false,
+                bulkOperations: false,
+                scheduledPosting: false,
+              },
+              usage: {
+                jobApplications: { limit: 5, used: 0 },
+                profileViews: { limit: 50, used: 0 },
+                jobPostings: { limit: 3, used: 0 },
+                messageThreads: { limit: 10, used: 0 },
+                bulkOperations: { limit: 0, used: 0 },
+              },
+              invoices: [],
+            },
+          },
+          {
+            upsert: true,
+            new: true,
+            setDefaultsOnInsert: true,
+          }
+        );
+        user.subscription = newSubscription;
+      } else {
+        user.subscription = subscription;
+      }
+    } catch (subError) {
+      console.error("Error loading subscription:", subError);
+      // Don't fail auth if subscription loading fails, just set to null
+      user.subscription = null;
     }
 
     req.user = user;

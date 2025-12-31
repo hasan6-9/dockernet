@@ -324,14 +324,14 @@ const EnhancedProfile = () => {
   // ============================================================================
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         {/* Header */}
         <div className="mb-8">
           <button
             onClick={() => navigate("/dashboard")}
             className="flex items-center text-gray-600 hover:text-gray-900 mb-4"
           >
-            <ArrowLeft className="w-4 h-4 mr-2" />
+            <ArrowLeft className="w-4 h-4 mr-1.5" />
             Back to Dashboard
           </button>
 
@@ -410,7 +410,7 @@ const EnhancedProfile = () => {
 
         {/* Tabs */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-8">
-          <div className="flex overflow-x-auto">
+          <div className="flex overflow-x-auto p-2">
             {[
               { id: "overview", label: "Overview", icon: User },
               { id: "professional", label: "Professional", icon: Briefcase },
@@ -421,10 +421,10 @@ const EnhancedProfile = () => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-6 py-4 border-b-2 font-medium transition-colors ${
+                  className={`flex items-center gap-2 px-6 py-3 font-medium transition-all rounded-lg mx-1 ${
                     activeTab === tab.id
-                      ? "border-blue-600 text-blue-600 bg-blue-50"
-                      : "border-transparent text-gray-500 hover:text-gray-700"
+                      ? "bg-blue-600 text-white shadow-md"
+                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                   }`}
                 >
                   <Icon className="w-5 h-5" />

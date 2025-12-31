@@ -4,6 +4,7 @@ const Job = require("../models/Job");
 const User = require("../models/User");
 const { validationResult } = require("express-validator");
 const mongoose = require("mongoose");
+const notificationService = require("../utils/notificationService");
 
 // @desc    Submit job application
 // @route   POST /api/applications/submit
@@ -101,13 +102,26 @@ exports.submitApplication = async (req, res) => {
     await application.populate([
       {
         path: "job_id",
-        select: "title category specialty budget timeline",
+        select: "title category specialty budget timeline posted_by",
       },
       {
         path: "applicant_id",
         select: "firstName lastName profilePhoto rating",
       },
     ]);
+
+    // Send notification to job owner
+    try {
+      await notificationService.createJobApplicationNotification(
+        job.posted_by,
+        req.user.id,
+        job._id,
+        application._id
+      );
+    } catch (notifError) {
+      console.error("Error sending application notification:", notifError);
+      // Don't fail the request if notification fails
+    }
 
     res.status(201).json({
       success: true,
@@ -349,6 +363,19 @@ exports.updateApplicationStatus = async (req, res) => {
       "applicant_id",
       "firstName lastName profilePhoto"
     );
+
+    // Send notification to applicant about status change
+    try {
+      await notificationService.createApplicationStatusNotification(
+        application.applicant_id._id,
+        application.job_id._id,
+        application._id,
+        status
+      );
+    } catch (notifError) {
+      console.error("Error sending status change notification:", notifError);
+      // Don't fail the request if notification fails
+    }
 
     res.status(200).json({
       success: true,

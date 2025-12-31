@@ -5,21 +5,27 @@ const JobSchema = new mongoose.Schema(
   {
     title: {
       type: String,
-      required: [true, "Job title is required"],
+      required: function () {
+        return this.status !== "draft";
+      },
       trim: true,
       minlength: [10, "Title must be at least 10 characters"],
       maxlength: [100, "Title cannot exceed 100 characters"],
     },
     description: {
       type: String,
-      required: [true, "Job description is required"],
+      required: function () {
+        return this.status !== "draft";
+      },
       trim: true,
       minlength: [50, "Description must be at least 50 characters"],
       maxlength: [2000, "Description cannot exceed 2000 characters"],
     },
     category: {
       type: String,
-      required: [true, "Job category is required"],
+      required: function () {
+        return this.status !== "draft";
+      },
       enum: {
         values: [
           "consultation",
@@ -34,7 +40,9 @@ const JobSchema = new mongoose.Schema(
     },
     specialty: {
       type: String,
-      required: [true, "Medical specialty is required"],
+      required: function () {
+        return this.status !== "draft";
+      },
       trim: true,
     },
     subSpecialties: [
@@ -52,13 +60,27 @@ const JobSchema = new mongoose.Schema(
     experience_required: {
       minimum_years: {
         type: Number,
-        required: true,
+        required: function () {
+          // For updates, check if status is or will be draft
+          if (this.isNew) {
+            return this.status !== "draft";
+          }
+          // During update, don't require if current status is draft
+          return this.status !== "draft";
+        },
         min: [0, "Minimum years cannot be negative"],
         max: [50, "Minimum years seems too high"],
       },
       level: {
         type: String,
-        required: true,
+        required: function () {
+          // For updates, check if status is or will be draft
+          if (this.isNew) {
+            return this.status !== "draft";
+          }
+          // During update, don't require if current status is draft
+          return this.status !== "draft";
+        },
         enum: {
           values: ["resident", "junior", "mid-level", "senior", "attending"],
           message:
@@ -69,7 +91,9 @@ const JobSchema = new mongoose.Schema(
     budget: {
       type: {
         type: String,
-        required: true,
+        required: function () {
+          return this.status !== "draft";
+        },
         enum: {
           values: ["fixed", "hourly", "negotiable"],
           message: "Budget type must be one of: fixed, hourly, negotiable",
@@ -78,7 +102,7 @@ const JobSchema = new mongoose.Schema(
       amount: {
         type: Number,
         required: function () {
-          return this.budget.type !== "negotiable";
+          return this.status !== "draft" && this.budget.type !== "negotiable";
         },
         min: [0, "Budget amount cannot be negative"],
       },
@@ -100,9 +124,13 @@ const JobSchema = new mongoose.Schema(
       },
       deadline: {
         type: Date,
-        required: true,
+        required: function () {
+          return this.status !== "draft";
+        },
         validate: {
           validator: function (value) {
+            // Skip validation for drafts
+            if (this.status === "draft") return true;
             return value > new Date();
           },
           message: "Deadline must be in the future",
@@ -279,6 +307,11 @@ JobSchema.virtual("isExpired").get(function () {
 
 // Pre-save middleware to generate slug
 JobSchema.pre("save", async function (next) {
+  // Skip slug generation for drafts or if title is empty
+  if (this.status === "draft" || !this.title) {
+    return next();
+  }
+
   if (!this.isModified("title") && this.slug) {
     return next();
   }

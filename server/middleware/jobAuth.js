@@ -2,6 +2,7 @@
 const Job = require("../models/Job");
 const Application = require("../models/Application");
 const User = require("../models/User");
+const Subscription = require("../models/Subscription");
 
 // Check if user can post jobs (senior doctors only)
 exports.canPostJobs = (req, res, next) => {
@@ -268,7 +269,7 @@ exports.canApplyToSpecificJob = async (req, res, next) => {
 
 // Check if user has active subscription (for premium features)
 exports.requireActiveSubscription = (req, res, next) => {
-  if (!req.user.subscription || req.user.subscription.status !== "active") {
+  if (!req.user.subscription || !req.user.subscription.isActive) {
     return res.status(403).json({
       success: false,
       message: "Active subscription required for this feature",
@@ -281,21 +282,16 @@ exports.requireActiveSubscription = (req, res, next) => {
 
 // Check if user can perform bulk operations
 exports.canPerformBulkOperations = (req, res, next) => {
-  // Limit bulk operations to verified users or premium subscribers
-  const isVerified = req.user.verificationStatus?.overall === "verified";
-  const hasActiveSubscription = req.user.subscription?.status === "active";
   const isAdmin = req.user.role === "admin";
+  const hasBulkOperations = req.user.subscription?.hasFeature("bulkOperations");
 
-  if (!isVerified && !hasActiveSubscription && !isAdmin) {
+  if (!hasBulkOperations && !isAdmin) {
     return res.status(403).json({
       success: false,
-      message:
-        "Bulk operations require account verification or active subscription",
-      requirements: {
-        verified: isVerified,
-        subscription: hasActiveSubscription,
-        admin: isAdmin,
-      },
+      message: "Bulk operations require Professional plan or higher",
+      currentPlan: req.user.subscription?.planId || "free",
+      requiredFeature: "bulkOperations",
+      upgradeRequired: true,
     });
   }
   next();
@@ -304,37 +300,39 @@ exports.canPerformBulkOperations = (req, res, next) => {
 // Rate limiting for job posting (prevent spam)
 exports.checkJobPostingLimit = async (req, res, next) => {
   try {
-    // Check how many jobs the user has posted today
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const subscription = req.user.subscription;
 
-    const jobsPostedToday = await Job.countDocuments({
-      posted_by: req.user.id,
-      createdAt: { $gte: today },
-    });
-
-    // Set limits based on user type
-    let dailyLimit;
-    if (req.user.subscription?.plan === "premium") {
-      dailyLimit = 20;
-    } else if (req.user.subscription?.plan === "basic") {
-      dailyLimit = 10;
-    } else {
-      dailyLimit = 5; // Free tier
+    if (!subscription) {
+      return res.status(403).json({
+        success: false,
+        message: "Subscription information not available",
+      });
     }
 
-    if (jobsPostedToday >= dailyLimit) {
+    // Check usage limits from subscription
+    const hasUsageAvailable = subscription.hasUsageAvailable("jobPostings");
+
+    if (!hasUsageAvailable) {
+      const remaining = subscription.getRemainingUsage("jobPostings");
+      const limit = subscription.usage.jobPostings?.limit;
+
       return res.status(429).json({
         success: false,
-        message: "Daily job posting limit reached",
-        limit: dailyLimit,
-        posted: jobsPostedToday,
-        resetTime: new Date(today.getTime() + 24 * 60 * 60 * 1000),
+        message: "Job posting limit reached for your plan",
+        limit: limit,
+        used: subscription.usage.jobPostings?.used || 0,
+        remaining: 0,
+        currentPlan: subscription.planId,
         upgradeInfo:
-          req.user.subscription?.plan !== "premium"
+          subscription.planId !== "enterprise"
             ? {
                 message: "Upgrade your subscription for higher limits",
-                premiumLimit: 20,
+                nextPlan:
+                  subscription.planId === "free"
+                    ? "basic"
+                    : subscription.planId === "basic"
+                    ? "professional"
+                    : "enterprise",
               }
             : null,
       });
@@ -353,39 +351,39 @@ exports.checkJobPostingLimit = async (req, res, next) => {
 // Rate limiting for job applications (prevent spam applications)
 exports.checkApplicationLimit = async (req, res, next) => {
   try {
-    // Check how many applications the user has submitted today
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const subscription = req.user.subscription;
 
-    const applicationsToday = await Application.countDocuments({
-      applicant_id: req.user.id,
-      createdAt: { $gte: today },
-      status: { $ne: "draft" }, // Don't count draft applications
-    });
-
-    // Set limits based on user verification and subscription
-    let dailyLimit;
-    if (req.user.verificationStatus?.overall === "verified") {
-      dailyLimit = 15;
-    } else if (req.user.subscription?.status === "active") {
-      dailyLimit = 10;
-    } else {
-      dailyLimit = 5; // Unverified free users
+    if (!subscription) {
+      return res.status(403).json({
+        success: false,
+        message: "Subscription information not available",
+      });
     }
 
-    if (applicationsToday >= dailyLimit) {
+    // Check usage limits from subscription
+    const hasUsageAvailable = subscription.hasUsageAvailable("jobApplications");
+
+    if (!hasUsageAvailable) {
+      const remaining = subscription.getRemainingUsage("jobApplications");
+      const limit = subscription.usage.jobApplications?.limit;
+
       return res.status(429).json({
         success: false,
-        message: "Daily application limit reached",
-        limit: dailyLimit,
-        submitted: applicationsToday,
-        resetTime: new Date(today.getTime() + 24 * 60 * 60 * 1000),
+        message: "Job application limit reached for your plan",
+        limit: limit,
+        used: subscription.usage.jobApplications?.used || 0,
+        remaining: 0,
+        currentPlan: subscription.planId,
         upgradeInfo:
-          req.user.verificationStatus?.overall !== "verified"
+          subscription.planId !== "enterprise"
             ? {
-                message:
-                  "Get your account verified for higher application limits",
-                verifiedLimit: 15,
+                message: "Upgrade your subscription for higher limits",
+                nextPlan:
+                  subscription.planId === "free"
+                    ? "basic"
+                    : subscription.planId === "basic"
+                    ? "professional"
+                    : "enterprise",
               }
             : null,
       });
@@ -404,16 +402,16 @@ exports.checkApplicationLimit = async (req, res, next) => {
 // Check if user can access premium job features
 exports.requirePremiumAccess = (req, res, next) => {
   const isPremium =
-    req.user.subscription?.plan === "premium" ||
-    req.user.subscription?.plan === "enterprise";
+    req.user.subscription?.planId === "professional" ||
+    req.user.subscription?.planId === "enterprise";
   const isAdmin = req.user.role === "admin";
 
   if (!isPremium && !isAdmin) {
     return res.status(403).json({
       success: false,
-      message: "Premium subscription required for this feature",
-      currentPlan: req.user.subscription?.plan || "free",
-      feature: "premium_jobs",
+      message: "Professional or Enterprise plan required for this feature",
+      currentPlan: req.user.subscription?.planId || "free",
+      requiredPlan: "professional",
     });
   }
 
@@ -426,7 +424,7 @@ exports.validateJobStatusTransition = (req, res, next) => {
   const currentStatus = req.job.status;
 
   const validTransitions = {
-    draft: ["active", "closed"],
+    draft: ["draft", "active", "closed"], // Allow updating drafts
     active: ["paused", "closed", "completed"],
     paused: ["active", "closed"],
     closed: ["active"], // Can reopen if needed

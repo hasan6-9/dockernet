@@ -252,11 +252,28 @@ const JobPosting = () => {
   };
 
   const handleSaveDraft = () => {
-    const draftData = { ...formData, status: "draft" };
+    // For drafts, just save whatever the user has entered
+    // Backend will skip validation for draft status
+    const draftData = {
+      ...formData,
+      status: "draft",
+    };
+
+    // Remove empty strings to avoid validation errors
+    const cleanData = JSON.parse(
+      JSON.stringify(draftData, (key, value) => {
+        // Remove empty strings, but keep 0, false, etc.
+        if (value === "") return undefined;
+        return value;
+      })
+    );
+
+    console.log("Saving draft with data:", cleanData);
+
     if (isEditing) {
-      updateMutation.mutate(draftData);
+      updateMutation.mutate(cleanData);
     } else {
-      createMutation.mutate(draftData);
+      createMutation.mutate(cleanData);
     }
   };
 
@@ -295,13 +312,13 @@ const JobPosting = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         {/* Header */}
         <button
           onClick={() => navigate("/jobs/manage")}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
         >
-          <ArrowLeft className="w-5 h-5" />
+          <ArrowLeft className="w-4 h-4 mr-1.5" />
           Back to Job Management
         </button>
 

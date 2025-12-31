@@ -23,7 +23,7 @@ const ManageSubscription = () => {
     getInvoices,
     cancelSubscription,
     downgradePlan,
-    upgradePlan,
+    updatePaymentMethod,
   } = useAuth();
 
   const [invoices, setInvoices] = useState([]);
@@ -250,10 +250,30 @@ const ManageSubscription = () => {
             )}
 
             <button
-              onClick={() =>
-                alert("Payment method update requires Stripe.js integration")
-              }
-              className="p-4 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors flex items-center justify-center gap-2"
+              onClick={async () => {
+                try {
+                  setLoading(true);
+                  setError("");
+
+                  // Get Stripe Customer Portal URL
+                  const data = await updatePaymentMethod();
+
+                  // Redirect to Stripe Customer Portal
+                  if (data.url) {
+                    window.location.href = data.url;
+                  }
+                } catch (err) {
+                  console.error("Error updating payment method:", err);
+                  setError(
+                    err.response?.data?.message ||
+                      "Failed to open payment portal. Please try again."
+                  );
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading || subscription.planId === "free"}
+              className="p-4 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <CreditCard className="w-5 h-5" />
               Update Payment Method

@@ -55,7 +55,7 @@ const JobManagement = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Fetch jobs
+  // Fetch filtered jobs
   const {
     data: jobsData,
     isLoading,
@@ -72,7 +72,17 @@ const JobManagement = () => {
     keepPreviousData: true,
   });
 
+  // Fetch all jobs for stats (regardless of filters)
+  const { data: allJobsData } = useQuery({
+    queryKey: ["my-jobs-stats"],
+    queryFn: async () => {
+      return jobAPI.getMyJobs({ status: "all" });
+    },
+    keepPreviousData: true,
+  });
+
   const jobs = jobsData?.data?.data || [];
+  const allJobs = allJobsData?.data?.data || [];
   const pagination = jobsData?.data?.pagination || { total: 0, pages: 0 };
 
   // Auto-refresh polling for real-time updates
@@ -99,17 +109,18 @@ const JobManagement = () => {
     };
   }, [refetch]);
 
-  // Stats calculation
+  // Stats calculation from ALL jobs (not filtered)
   const stats = {
-    total: jobs.length,
-    active: jobs.filter((j) => j.status === "active").length,
-    paused: jobs.filter((j) => j.status === "paused").length,
-    closed: jobs.filter((j) => j.status === "closed").length,
-    totalApplications: jobs.reduce(
+    total: allJobs.length,
+    active: allJobs.filter((j) => j.status === "active").length,
+    paused: allJobs.filter((j) => j.status === "paused").length,
+    draft: allJobs.filter((j) => j.status === "draft").length,
+    closed: allJobs.filter((j) => j.status === "closed").length,
+    totalApplications: allJobs.reduce(
       (sum, j) => sum + (j.applications_count || 0),
       0
     ),
-    totalViews: jobs.reduce((sum, j) => sum + (j.views_count || 0), 0),
+    totalViews: allJobs.reduce((sum, j) => sum + (j.views_count || 0), 0),
   };
 
   // Mutations
@@ -346,7 +357,7 @@ const JobManagement = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-4">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -435,61 +446,89 @@ const JobManagement = () => {
         </div>
 
         {/* Search & Filters */}
-        <div className="bg-white rounded-lg border p-4 mb-6">
-          <div className="flex gap-4 mb-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search jobs..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+        <div className="bg-white rounded-lg border mb-6">
+          <div className="p-4">
+            <div className="flex gap-4">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search jobs..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`px-4 py-2 border rounded-lg flex items-center gap-2 ${
+                  showFilters
+                    ? "bg-blue-50 border-blue-500 text-blue-700"
+                    : "hover:bg-gray-50"
+                }`}
+              >
+                <Filter className="w-4 h-4" />
+                Filters
+              </button>
+              <button
+                onClick={() => refetch()}
+                className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                title="Refresh"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+              <button
+                onClick={exportToCSV}
+                disabled={jobs.length === 0}
+                className="px-4 py-2 border rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                title="Export to CSV"
+              >
+                <Download className="w-4 h-4" />
+              </button>
             </div>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`px-4 py-2 border rounded-lg flex items-center gap-2 ${
-                showFilters
-                  ? "bg-blue-50 border-blue-500 text-blue-700"
-                  : "hover:bg-gray-50"
-              }`}
-            >
-              <Filter className="w-4 h-4" />
-              Filters
-            </button>
-            <button
-              onClick={() => refetch()}
-              className="px-4 py-2 border rounded-lg hover:bg-gray-50"
-              title="Refresh"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-            <button
-              onClick={exportToCSV}
-              disabled={jobs.length === 0}
-              className="px-4 py-2 border rounded-lg hover:bg-gray-50 disabled:opacity-50"
-              title="Export to CSV"
-            >
-              <Download className="w-4 h-4" />
-            </button>
+          </div>
+
+          {/* Status Tabs */}
+          <div className="border-t">
+            <div className="flex overflow-x-auto p-2">
+              {[
+                { id: "all", label: "All Jobs", count: stats.total },
+                { id: "active", label: "Active", count: stats.active },
+                { id: "paused", label: "Paused", count: stats.paused },
+                {
+                  id: "draft",
+                  label: "Drafts",
+                  count: stats.draft,
+                },
+                { id: "closed", label: "Closed", count: stats.closed },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => handleFilterChange("status", tab.id)}
+                  className={`flex items-center gap-2 px-6 py-3 font-medium transition-all rounded-lg mx-1 whitespace-nowrap ${
+                    filters.status === tab.id
+                      ? "bg-blue-600 text-white shadow-md"
+                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                  }`}
+                >
+                  {tab.label}
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                      filters.status === tab.id
+                        ? "bg-white/20 text-white"
+                        : "bg-gray-200 text-gray-700"
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
 
           {showFilters && (
-            <div className="border-t pt-4">
-              <div className="grid md:grid-cols-3 gap-4">
-                <select
-                  value={filters.status}
-                  onChange={(e) => handleFilterChange("status", e.target.value)}
-                  className="px-3 py-2 border rounded-lg"
-                >
-                  <option value="all">All Statuses</option>
-                  <option value="active">Active</option>
-                  <option value="paused">Paused</option>
-                  <option value="closed">Closed</option>
-                  <option value="draft">Draft</option>
-                </select>
-
+            <div className="border-t p-4">
+              <div className="grid md:grid-cols-2 gap-4">
                 <select
                   value={filters.category}
                   onChange={(e) =>
@@ -510,8 +549,8 @@ const JobManagement = () => {
                   onChange={(e) => handleFilterChange("sortBy", e.target.value)}
                   className="px-3 py-2 border rounded-lg"
                 >
-                  <option value="createdAt">Most Recent</option>
-                  <option value="-createdAt">Oldest First</option>
+                  <option value="-createdAt">Most Recent</option>
+                  <option value="createdAt">Oldest First</option>
                   <option value="-applications_count">Most Applications</option>
                   <option value="-views_count">Most Views</option>
                 </select>
@@ -696,16 +735,18 @@ const JobManagement = () => {
                                         Activate Job
                                       </button>
                                     )}
-                                    <button
-                                      onClick={() => {
-                                        setDeleteConfirm(job._id);
-                                        setActiveDropdown(null);
-                                      }}
-                                      className="flex items-center gap-3 px-4 py-3 hover:bg-red-50 text-red-700 w-full text-left last:rounded-b-lg"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                      Delete Job
-                                    </button>
+                                    {job.status !== "closed" && (
+                                      <button
+                                        onClick={() => {
+                                          setDeleteConfirm(job._id);
+                                          setActiveDropdown(null);
+                                        }}
+                                        className="flex items-center gap-3 px-4 py-3 hover:bg-red-50 text-red-700 w-full text-left last:rounded-b-lg"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                        Delete Job
+                                      </button>
+                                    )}
                                   </div>
                                 </>
                               )}

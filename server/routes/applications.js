@@ -51,6 +51,8 @@ const {
   validateApplicationOwnership,
 } = require("../middleware/jobValidation");
 
+const { requireFeature } = require("../middleware/subscription");
+
 const router = express.Router();
 
 // ======================
@@ -119,7 +121,7 @@ router.post(
   protect,
   requireActive,
   canApplyToJobs,
-  requireVerifiedAccount,
+  requireFeature("bulkOperations"),
   async (req, res) => {
     try {
       const { applicationIds } = req.body;

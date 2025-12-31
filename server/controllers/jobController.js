@@ -161,9 +161,12 @@ exports.updateJob = async (req, res) => {
     }
 
     // Update job
+    // Skip validation for drafts
+    const runValidators = req.body.status !== "draft" && job.status !== "draft";
+
     job = await Job.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
-      runValidators: true,
+      runValidators,
     }).populate("posted_by", "firstName lastName profilePhoto");
 
     res.status(200).json({
@@ -238,8 +241,10 @@ exports.deleteJob = async (req, res) => {
     }
 
     // Soft delete by setting status to closed
+    const wasDraft = job.status === "draft";
     job.status = "closed";
-    await job.save();
+    // Skip validation for drafts (they might have empty required fields)
+    await job.save({ validateBeforeSave: !wasDraft });
 
     res.status(200).json({
       success: true,

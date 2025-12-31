@@ -230,7 +230,7 @@ const Profile = () => {
             <div className="flex items-center space-x-4">
               <Link
                 to="/dashboard"
-                className="flex items-center space-x-2 text-gray-600 hover:text-green-600 transition-colors group"
+                className="flex items-center space-x-2 text-gray-600 hover:text-green-600 transition-colors group ml-3"
               >
                 <svg
                   className="w-5 h-5 group-hover:-translate-x-1 transition-transform"
@@ -261,7 +261,7 @@ const Profile = () => {
         </div>
       </nav>
 
-      <main className="relative max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <main className="relative max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
         {/* Profile Header */}
         <div className="mb-8 animate-fade-in-up">
           <div className="card-glass rounded-2xl p-8">

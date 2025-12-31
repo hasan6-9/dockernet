@@ -1,9 +1,16 @@
 // client/src/pages/Dashboard.js - MVP Testing Version (Updated with Subscription Widget)
 import React from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
-import { profileAPI, jobAPI, applicationAPI, adminAPI } from "../api";
+import {
+  profileAPI,
+  jobAPI,
+  applicationAPI,
+  adminAPI,
+  messageAPI,
+  notificationAPI,
+} from "../api";
 import {
   User,
   Briefcase,
@@ -13,28 +20,39 @@ import {
   Eye,
   Clock,
   CheckCircle,
-  XCircle,
   TrendingUp,
   Users,
   Shield,
   ArrowRight,
   Loader,
-  AlertCircle,
-  LogOut,
   CreditCard,
+  MessageSquare,
+  Bell,
 } from "lucide-react";
 
 const Dashboard = () => {
-  const navigate = useNavigate();
   const {
     user,
-    logout,
     isJunior,
     isSenior,
     isAdmin,
     subscription,
     subscriptionLoading,
   } = useAuth();
+
+  // Fetch recent conversations
+  const { data: conversationsData } = useQuery({
+    queryKey: ["conversations", "dashboard"],
+    queryFn: () => messageAPI.getConversations({ limit: 3 }),
+    enabled: !!user && !isAdmin(),
+  });
+
+  // Fetch unread notifications count
+  const { data: notificationsData } = useQuery({
+    queryKey: ["notifications", "unread-count"],
+    queryFn: () => notificationAPI.getUnreadCount(),
+    enabled: !!user,
+  });
 
   const { data: profileData } = useQuery({
     queryKey: ["profile", "me"],
@@ -80,11 +98,6 @@ const Dashboard = () => {
     enabled: isAdmin(),
   });
 
-  const handleLogout = async () => {
-    await logout();
-    navigate("/login");
-  };
-
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -95,27 +108,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <h1 className="text-2xl font-bold text-blue-600">Doconnect</h1>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-600">
-                {user.firstName} {user.lastName} ({user.role})
-              </span>
-              <button
-                onClick={handleLogout}
-                className="text-gray-600 hover:text-red-600"
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         {/* Welcome Section */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
@@ -185,18 +178,18 @@ const Dashboard = () => {
                 </p>
               </div>
               <div className="flex flex-col gap-2">
-                <button
-                  onClick={() => navigate("/subscription/status")}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors"
+                <Link
+                  to="/subscription/status"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors text-center"
                 >
                   View Details
-                </button>
-                <button
-                  onClick={() => navigate("/subscription/manage")}
-                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm font-medium transition-colors"
+                </Link>
+                <Link
+                  to="/subscription/manage"
+                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm font-medium transition-colors text-center"
                 >
                   Manage
-                </button>
+                </Link>
               </div>
             </div>
           ) : (
@@ -205,12 +198,12 @@ const Dashboard = () => {
                 You're currently on the free plan. Upgrade to unlock premium
                 features.
               </p>
-              <button
-                onClick={() => navigate("/subscription/plans")}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors"
+              <Link
+                to="/subscription/plans"
+                className="inline-block px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors"
               >
                 View Plans
-              </button>
+              </Link>
             </div>
           )}
         </div>
@@ -253,7 +246,6 @@ const JuniorDashboard = ({
   jobRecommendationsData,
 }) => {
   const applications = myApplicationsData?.data?.data || [];
-  const recommendations = jobRecommendationsData?.data?.data || [];
   const appsPagination = myApplicationsData?.data?.pagination || {};
 
   const stats = [

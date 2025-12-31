@@ -3,7 +3,9 @@ const { body, query, param } = require("express-validator");
 
 // Job posting validation rules
 exports.validateJobCreation = [
+  // Skip validation for drafts
   body("title")
+    .if(body("status").not().equals("draft"))
     .trim()
     .isLength({ min: 10, max: 100 })
     .withMessage("Title must be between 10 and 100 characters")
@@ -11,11 +13,13 @@ exports.validateJobCreation = [
     .withMessage("Title contains invalid characters"),
 
   body("description")
+    .if(body("status").not().equals("draft"))
     .trim()
     .isLength({ min: 50, max: 2000 })
     .withMessage("Description must be between 50 and 2000 characters"),
 
   body("category")
+    .if(body("status").not().equals("draft"))
     .isIn([
       "consultation",
       "research",
@@ -28,6 +32,7 @@ exports.validateJobCreation = [
     ),
 
   body("specialty")
+    .if(body("status").not().equals("draft"))
     .trim()
     .isLength({ min: 2, max: 100 })
     .withMessage(
@@ -57,20 +62,24 @@ exports.validateJobCreation = [
     .withMessage("Each skill must be between 2 and 100 characters"),
 
   body("experience_required.minimum_years")
+    .if(body("status").not().equals("draft"))
     .isInt({ min: 0, max: 50 })
     .withMessage("Minimum years of experience must be between 0 and 50"),
 
   body("experience_required.level")
+    .if(body("status").not().equals("draft"))
     .isIn(["resident", "junior", "mid-level", "senior", "attending"])
     .withMessage(
       "Experience level must be one of: resident, junior, mid-level, senior, attending"
     ),
 
   body("budget.type")
+    .if(body("status").not().equals("draft"))
     .isIn(["fixed", "hourly", "negotiable"])
     .withMessage("Budget type must be one of: fixed, hourly, negotiable"),
 
   body("budget.amount")
+    .if(body("status").not().equals("draft"))
     .if(body("budget.type").not().equals("negotiable"))
     .isFloat({ min: 0, max: 1000000 })
     .withMessage("Budget amount must be between 0 and 1,000,000"),
@@ -86,9 +95,13 @@ exports.validateJobCreation = [
     .withMessage("Estimated hours must be between 1 and 1000"),
 
   body("timeline.deadline")
+    .if(body("status").not().equals("draft"))
     .isISO8601()
     .withMessage("Deadline must be a valid date")
-    .custom((value) => {
+    .custom((value, { req }) => {
+      // Skip for drafts
+      if (req.body.status === "draft") return true;
+
       const deadline = new Date(value);
       const now = new Date();
       const minDate = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours from now

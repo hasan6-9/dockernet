@@ -444,42 +444,96 @@ exports.cancelSubscription = async (req, res) => {
 
     const subscription = await Subscription.findOne({
       userId: req.user._id,
-      status: { $in: ["active", "trialing", "past_due"] },
     });
 
     if (!subscription) {
       return res.status(404).json({
         success: false,
-        message: "No active subscription found",
+        message: "No subscription found",
       });
     }
 
-    // If has Stripe subscription, cancel it
-    if (subscription.stripeSubscriptionId) {
-      await stripe.subscriptions.del(subscription.stripeSubscriptionId, {
-        proration_behavior: "none",
+    // If already on free tier, nothing to cancel
+    if (subscription.planId === "free") {
+      return res.status(400).json({
+        success: false,
+        message: "Already on free tier",
       });
     }
 
-    // Update subscription
-    subscription.status = "canceled";
+    // If has real Stripe subscription, cancel it
+    const hasRealStripeId =
+      subscription.stripeSubscriptionId &&
+      !subscription.stripeSubscriptionId.startsWith("seed_") &&
+      !subscription.stripeSubscriptionId.startsWith("temp_");
+
+    if (hasRealStripeId) {
+      try {
+        await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+          cancel_at_period_end: true,
+        });
+
+        // Schedule downgrade to free tier at period end (maintains access)
+        subscription.scheduledDowngrade = {
+          targetPlan: "free",
+          effectiveDate: subscription.currentPeriodEnd,
+          reason: reason || "User requested cancellation",
+        };
+        subscription.willCancelAt = subscription.currentPeriodEnd;
+      } catch (stripeError) {
+        console.error("Stripe cancellation error:", stripeError.message);
+        // Continue with local cancellation even if Stripe fails
+      }
+    } else {
+      // For seeded/test subscriptions, downgrade immediately
+      subscription.planId = "free";
+      subscription.planName = "Free Tier";
+      subscription.planPrice = 0;
+      subscription.status = "free";
+
+      // Update features for free tier
+      subscription.features = {
+        unlimitedApplications: false,
+        advancedSearch: false,
+        featuredJobPostings: false,
+        directMessaging: false,
+        advancedAnalytics: false,
+        prioritySupport: false,
+        customBranding: false,
+        apiAccess: false,
+        bulkOperations: false,
+        scheduledPosting: false,
+      };
+
+      // Update usage limits for free tier
+      subscription.usage = {
+        jobApplications: { limit: 5, used: 0 },
+        profileViews: { limit: 50, used: 0 },
+        jobPostings: { limit: 3, used: 0 },
+        messageThreads: { limit: 10, used: 0 },
+        bulkOperations: { limit: 0, used: 0 },
+      };
+    }
+
     subscription.canceledAt = new Date();
-    subscription.cancelationReason = reason;
+    subscription.cancelationReason = reason || "Downgraded to free tier";
     subscription.cancelationFeedback = feedback;
+
     await subscription.save();
 
-    // Update user
-    await User.findByIdAndUpdate(req.user._id, {
-      "subscription.status": "canceled",
-    });
+    const message = hasRealStripeId
+      ? `Subscription will be canceled on ${subscription.currentPeriodEnd.toLocaleDateString()}. You'll retain access until then.`
+      : "Successfully downgraded to free tier";
 
     res.status(200).json({
       success: true,
-      message: "Subscription cancelled successfully",
+      message,
       data: {
         planId: subscription.planId,
         status: subscription.status,
         canceledAt: subscription.canceledAt,
+        willCancelAt: subscription.willCancelAt,
+        scheduledDowngrade: subscription.scheduledDowngrade,
       },
     });
   } catch (error) {
@@ -508,101 +562,172 @@ exports.reactivateSubscription = async (req, res) => {
       });
     }
 
-    if (subscription.status !== "canceled") {
+    // Check if user has real Stripe subscription ID
+    const hasRealStripeId =
+      subscription.stripeSubscriptionId &&
+      !subscription.stripeSubscriptionId.startsWith("seed_") &&
+      !subscription.stripeSubscriptionId.startsWith("temp_");
+
+    if (!hasRealStripeId) {
       return res.status(400).json({
         success: false,
-        message: "Only canceled subscriptions can be reactivated",
-        currentStatus: subscription.status,
+        message:
+          "Cannot reactivate test/seeded subscriptions. Please upgrade to a paid plan.",
       });
     }
 
-    if (!subscription.canReactivate) {
-      return res.status(400).json({
-        success: false,
-        message: "This subscription cannot be reactivated",
-        reason: "Contact support for assistance",
-      });
+    // SCENARIO 1: Subscription is scheduled for cancellation but still active
+    // Action: Remove cancel_at_period_end flag from Stripe
+    if (subscription.willCancelAt && subscription.status === "active") {
+      try {
+        // Remove cancellation from Stripe
+        await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+          cancel_at_period_end: false,
+        });
+
+        // Clear cancellation fields in database
+        subscription.willCancelAt = null;
+        subscription.scheduledDowngrade = null;
+        subscription.canceledAt = null;
+        subscription.cancelationReason = null;
+        subscription.cancelationFeedback = null;
+
+        await subscription.save();
+
+        return res.status(200).json({
+          success: true,
+          message:
+            "Subscription reactivated successfully. Your plan will continue as normal.",
+          data: {
+            planId: subscription.planId,
+            planName: subscription.planName,
+            status: subscription.status,
+            currentPeriodEnd: subscription.currentPeriodEnd,
+            willCancelAt: null,
+          },
+        });
+      } catch (stripeError) {
+        console.error("Stripe reactivation error:", stripeError);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to reactivate subscription with Stripe",
+          error: stripeError.message,
+        });
+      }
     }
 
-    // Redirect to checkout for reactivation
-    const { planId = subscription.planId } = req.body;
+    // SCENARIO 2: Subscription already canceled/expired (period ended)
+    // Action: Redirect to checkout for new subscription
+    if (subscription.status === "canceled" || subscription.planId === "free") {
+      const { planId = "basic" } = req.body; // Default to basic if not specified
 
-    // Create new checkout session
-    const plan = PLANS[planId];
-    if (!plan) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid plan",
-      });
-    }
+      if (!PLANS[planId] || planId === "free") {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid plan for reactivation",
+        });
+      }
 
-    const session = await stripe.checkout.sessions.create({
-      customer: subscription.stripeCustomerId,
-      payment_method_types: ["card"],
-      line_items: [
-        {
-          price: plan.stripePriceId,
-          quantity: 1,
+      const plan = PLANS[planId];
+
+      // Create new checkout session
+      const session = await stripe.checkout.sessions.create({
+        customer: subscription.stripeCustomerId,
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price: plan.stripePriceId,
+            quantity: 1,
+          },
+        ],
+        mode: "subscription",
+        success_url: `${process.env.CLIENT_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.CLIENT_URL}/subscription/manage`,
+        subscription_data: {
+          metadata: {
+            userId: req.user._id.toString(),
+            planId,
+            isReactivation: "true",
+          },
         },
-      ],
-      mode: "subscription",
-      success_url: `${process.env.CLIENT_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.CLIENT_URL}/subscription/plans`,
-    });
+      });
 
-    res.status(200).json({
-      success: true,
-      message: "Reactivation checkout session created",
-      data: {
-        sessionId: session.id,
-        url: session.url,
-      },
+      return res.status(200).json({
+        success: true,
+        message: "Checkout session created for reactivation",
+        data: {
+          sessionId: session.id,
+          url: session.url,
+        },
+      });
+    }
+
+    // SCENARIO 3: Subscription is active and not canceled
+    // Action: Nothing to reactivate
+    return res.status(400).json({
+      success: false,
+      message:
+        "Subscription is already active and not scheduled for cancellation",
+      currentStatus: subscription.status,
     });
   } catch (error) {
     console.error("Reactivation error:", error);
     res.status(500).json({
       success: false,
       message: "Error reactivating subscription",
+      error: error.message,
     });
   }
 };
 
-// @desc    Update payment method
+// @desc    Create Stripe Customer Portal session for payment method update
 // @route   POST /api/subscriptions/update-payment-method
 // @access  Private
 exports.updatePaymentMethod = async (req, res) => {
   try {
     const subscription = await Subscription.findOne({
       userId: req.user._id,
-      status: { $in: ["active", "trialing", "past_due"] },
     });
 
     if (!subscription) {
       return res.status(404).json({
         success: false,
-        message: "No active subscription found",
+        message: "No subscription found",
       });
     }
 
-    // Create setup intent for updating payment method
-    const setupIntent = await stripe.setupIntents.create({
+    // Check if user has real Stripe customer ID
+    const hasRealStripeId =
+      subscription.stripeCustomerId &&
+      !subscription.stripeCustomerId.startsWith("seed_") &&
+      !subscription.stripeCustomerId.startsWith("temp_");
+
+    if (!hasRealStripeId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Payment method update is only available for active paid subscriptions",
+      });
+    }
+
+    // Create Stripe Customer Portal session
+    const session = await stripe.billingPortal.sessions.create({
       customer: subscription.stripeCustomerId,
-      payment_method_types: ["card"],
-      usage: "off_session",
+      return_url: `${process.env.CLIENT_URL}/subscription/manage`,
     });
 
     res.status(200).json({
       success: true,
       data: {
-        clientSecret: setupIntent.client_secret,
-        publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+        url: session.url,
       },
     });
   } catch (error) {
     console.error("Payment method update error:", error);
     res.status(500).json({
       success: false,
-      message: "Error updating payment method",
+      message: "Error creating payment portal session",
+      error: error.message,
     });
   }
 };
@@ -625,28 +750,39 @@ exports.getInvoices = async (req, res) => {
       });
     }
 
-    // Get invoices from Stripe if subscription has Stripe ID
+    // Get invoices from Stripe if subscription has valid Stripe ID
     let invoices = [];
 
-    if (subscription.stripeCustomerId) {
-      const stripeInvoices = await stripe.invoices.list({
-        customer: subscription.stripeCustomerId,
-        limit: limit,
-      });
+    // Only call Stripe if we have a real customer ID (not seed_ or temp_)
+    const hasRealStripeId =
+      subscription.stripeCustomerId &&
+      !subscription.stripeCustomerId.startsWith("seed_") &&
+      !subscription.stripeCustomerId.startsWith("temp_");
 
-      invoices = stripeInvoices.data.map((invoice) => ({
-        id: invoice.id,
-        amount: invoice.amount_paid || invoice.amount_due,
-        currency: invoice.currency,
-        status: invoice.status,
-        date: new Date(invoice.created * 1000),
-        periodStart: new Date(invoice.period_start * 1000),
-        periodEnd: new Date(invoice.period_end * 1000),
-        paidAt: invoice.paid_at ? new Date(invoice.paid_at * 1000) : null,
-        invoiceUrl: invoice.hosted_invoice_url,
-        receiptUrl: invoice.receipt_number,
-        description: invoice.description,
-      }));
+    if (hasRealStripeId) {
+      try {
+        const stripeInvoices = await stripe.invoices.list({
+          customer: subscription.stripeCustomerId,
+          limit: parseInt(limit),
+        });
+
+        invoices = stripeInvoices.data.map((invoice) => ({
+          id: invoice.id,
+          amount: invoice.amount_paid || invoice.amount_due,
+          currency: invoice.currency,
+          status: invoice.status,
+          date: new Date(invoice.created * 1000),
+          periodStart: new Date(invoice.period_start * 1000),
+          periodEnd: new Date(invoice.period_end * 1000),
+          paidAt: invoice.paid_at ? new Date(invoice.paid_at * 1000) : null,
+          invoiceUrl: invoice.hosted_invoice_url,
+          receiptUrl: invoice.receipt_number,
+          description: invoice.description,
+        }));
+      } catch (stripeError) {
+        console.error("Stripe invoice fetch error:", stripeError.message);
+        // Don't fail the request, just return empty invoices
+      }
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -735,35 +871,97 @@ exports.upgradePlan = async (req, res) => {
     // For existing subscription, use Stripe's update
     if (subscription.stripeSubscriptionId) {
       const targetPlan = PLANS[targetPlanId];
-      const currentPlan = PLANS[subscription.planId];
 
-      // Get current subscription items
+      // Get current subscription from Stripe
       const currentSubscription = await stripe.subscriptions.retrieve(
         subscription.stripeSubscriptionId
       );
 
       const item = currentSubscription.items.data[0];
 
-      // Update subscription
-      await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
-        items: [
-          {
-            id: item.id,
-            price: targetPlan.stripePriceId,
-          },
-        ],
-        proration_behavior: "create_prorations",
+      // Update subscription in Stripe with immediate proration
+      const updatedSubscription = await stripe.subscriptions.update(
+        subscription.stripeSubscriptionId,
+        {
+          items: [
+            {
+              id: item.id,
+              price: targetPlan.stripePriceId,
+            },
+          ],
+          proration_behavior: "create_prorations", // Charge immediately
+        }
+      );
+
+      // CRITICAL: Sync database with Stripe state
+      subscription.planId = targetPlanId;
+      subscription.planName = targetPlan.name;
+      subscription.planPrice = targetPlan.price;
+      subscription.features = targetPlan.features;
+      subscription.usage = {
+        ...targetPlan.usage,
+        // Preserve current usage counts
+        jobApplications: {
+          limit: targetPlan.usage.jobApplications.limit,
+          used: subscription.usage.jobApplications?.used || 0,
+        },
+        profileViews: {
+          limit: targetPlan.usage.profileViews.limit,
+          used: subscription.usage.profileViews?.used || 0,
+        },
+        jobPostings: {
+          limit: targetPlan.usage.jobPostings.limit,
+          used: subscription.usage.jobPostings?.used || 0,
+        },
+        messageThreads: {
+          limit: targetPlan.usage.messageThreads.limit,
+          used: subscription.usage.messageThreads?.used || 0,
+        },
+        bulkOperations: {
+          limit: targetPlan.usage.bulkOperations.limit,
+          used: subscription.usage.bulkOperations?.used || 0,
+        },
+      };
+
+      // Update period from Stripe
+      subscription.currentPeriodStart = new Date(
+        updatedSubscription.current_period_start * 1000
+      );
+      subscription.currentPeriodEnd = new Date(
+        updatedSubscription.current_period_end * 1000
+      );
+
+      // Add to plan change history
+      subscription.planChangeHistory.push({
+        fromPlan: subscription.planId,
+        toPlan: targetPlanId,
+        changedAt: new Date(),
+        changeReason: "User-initiated upgrade",
       });
 
-      res.status(200).json({
+      await subscription.save();
+
+      return res.status(200).json({
         success: true,
-        message: "Plan upgraded successfully",
+        message:
+          "Plan upgraded successfully. Changes are effective immediately.",
         data: {
-          fromPlan: subscription.planId,
+          planId: subscription.planId,
+          planName: subscription.planName,
+          fromPlan:
+            subscription.planChangeHistory[
+              subscription.planChangeHistory.length - 1
+            ].fromPlan,
           toPlan: targetPlanId,
-          newPrice: targetPlan.price,
+          newPrice: targetPlan.price / 100,
           billingCycle: subscription.planBillingCycle,
+          currentPeriodEnd: subscription.currentPeriodEnd,
         },
+      });
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "No Stripe subscription found. Please contact support.",
       });
     }
   } catch (error) {
@@ -812,46 +1010,58 @@ exports.downgradePlan = async (req, res) => {
       });
     }
 
-    // Schedule downgrade for next billing cycle (no immediate charge)
-    if (subscription.stripeSubscriptionId) {
-      const targetPlan = PLANS[targetPlanId];
-      const currentSubscription = await stripe.subscriptions.retrieve(
-        subscription.stripeSubscriptionId
-      );
+    // Check if user has real Stripe subscription
+    const hasRealStripeId =
+      subscription.stripeSubscriptionId &&
+      !subscription.stripeSubscriptionId.startsWith("seed_") &&
+      !subscription.stripeSubscriptionId.startsWith("temp_");
 
-      const item = currentSubscription.items.data[0];
-
-      // Update subscription with proration set to none (charge at next cycle)
-      await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
-        items: [
-          {
-            id: item.id,
-            price: targetPlan.stripePriceId,
-          },
-        ],
-        proration_behavior: "none",
-      });
-
-      // Store in plan change history
-      subscription.planChangeHistory.push({
-        fromPlan: subscription.planId,
-        toPlan: targetPlanId,
-        changeReason: "User-initiated downgrade",
-      });
-
-      await subscription.save();
-
-      res.status(200).json({
-        success: true,
-        message: "Plan downgrade scheduled",
-        data: {
-          fromPlan: subscription.planId,
-          toPlan: targetPlanId,
-          effectiveDate: subscription.currentPeriodEnd,
-          message: "New plan will take effect at your next billing cycle",
-        },
+    if (!hasRealStripeId) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot downgrade test/seeded subscriptions",
       });
     }
+
+    const targetPlan = PLANS[targetPlanId];
+
+    // IMPORTANT: Schedule downgrade for end of billing period
+    // Do NOT update Stripe subscription immediately
+    // The downgrade will be applied by webhook when subscription period ends
+
+    // Store scheduled downgrade in database
+    subscription.scheduledDowngrade = {
+      targetPlan: targetPlanId,
+      effectiveDate: subscription.currentPeriodEnd,
+      reason: "User-initiated downgrade",
+    };
+
+    // Add to plan change history
+    subscription.planChangeHistory.push({
+      fromPlan: subscription.planId,
+      toPlan: targetPlanId,
+      changedAt: new Date(),
+      changeReason: "User-initiated downgrade (scheduled)",
+    });
+
+    await subscription.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Downgrade to ${
+        targetPlan.name
+      } scheduled for ${subscription.currentPeriodEnd.toLocaleDateString()}`,
+      data: {
+        currentPlan: subscription.planId,
+        currentPlanName: subscription.planName,
+        targetPlan: targetPlanId,
+        targetPlanName: targetPlan.name,
+        effectiveDate: subscription.currentPeriodEnd,
+        scheduledDowngrade: subscription.scheduledDowngrade,
+        message:
+          "You'll retain access to your current plan features until the end of your billing period.",
+      },
+    });
   } catch (error) {
     console.error("Downgrade error:", error);
     res.status(500).json({
@@ -1136,12 +1346,6 @@ async function handleSubscriptionCreated(stripeSubscription) {
 
     await subscription.save();
 
-    // Update user subscription status
-    await User.findByIdAndUpdate(userId, {
-      "subscription.plan": planId,
-      "subscription.status": stripeSubscription.status,
-    });
-
     console.log(`Subscription created for user ${userId}, plan: ${planId}`);
   } catch (error) {
     console.error("Error handling subscription created:", error);
@@ -1179,11 +1383,6 @@ async function handleSubscriptionUpdated(stripeSubscription) {
 
     await subscription.save();
 
-    // Update user
-    await User.findByIdAndUpdate(subscription.userId, {
-      "subscription.status": stripeSubscription.status,
-    });
-
     console.log(
       `Subscription updated for user ${subscription.userId}, status: ${stripeSubscription.status}`
     );
@@ -1192,6 +1391,15 @@ async function handleSubscriptionUpdated(stripeSubscription) {
   }
 }
 
+/**
+ * Handle Stripe subscription.deleted webhook event
+ * CRITICAL: This is where scheduled downgrades are executed
+ *
+ * Scenarios:
+ * 1. User canceled subscription → Apply scheduled downgrade to free tier
+ * 2. User downgraded plan → Apply scheduled downgrade to target plan
+ * 3. Payment failed repeatedly → Mark as canceled
+ */
 async function handleSubscriptionDeleted(stripeSubscription) {
   try {
     const subscription = await Subscription.findOne({
@@ -1199,25 +1407,113 @@ async function handleSubscriptionDeleted(stripeSubscription) {
     });
 
     if (!subscription) {
-      console.error(`Subscription not found: ${stripeSubscription.id}`);
+      console.error(
+        `❌ Subscription not found for Stripe ID: ${stripeSubscription.id}`
+      );
       return;
     }
 
+    console.log(
+      `🔄 Processing subscription.deleted for user ${subscription.userId}`
+    );
+    console.log(`   Current plan: ${subscription.planId}`);
+    console.log(
+      `   Scheduled downgrade: ${
+        subscription.scheduledDowngrade
+          ? subscription.scheduledDowngrade.targetPlan
+          : "none"
+      }`
+    );
+
+    // SCENARIO 1: Scheduled downgrade exists (user canceled or downgraded)
+    if (subscription.scheduledDowngrade) {
+      const targetPlanId = subscription.scheduledDowngrade.targetPlan;
+      const targetPlan = PLANS[targetPlanId];
+
+      if (!targetPlan) {
+        console.error(`❌ Invalid target plan: ${targetPlanId}`);
+        // Fallback to free tier
+        targetPlanId = "free";
+      }
+
+      const fromPlan = subscription.planId;
+
+      // Apply the scheduled downgrade
+      subscription.planId = targetPlanId;
+      subscription.planName = targetPlan.name;
+      subscription.planPrice = targetPlan.price;
+      subscription.status = targetPlanId === "free" ? "free" : "active";
+      subscription.features = targetPlan.features;
+
+      // Reset usage limits to new plan
+      subscription.usage = {
+        jobApplications: {
+          limit: targetPlan.usage.jobApplications.limit,
+          used: 0, // Reset usage on plan change
+        },
+        profileViews: {
+          limit: targetPlan.usage.profileViews.limit,
+          used: 0,
+        },
+        jobPostings: {
+          limit: targetPlan.usage.jobPostings.limit,
+          used: 0,
+        },
+        messageThreads: {
+          limit: targetPlan.usage.messageThreads.limit,
+          used: 0,
+        },
+        bulkOperations: {
+          limit: targetPlan.usage.bulkOperations.limit,
+          used: 0,
+        },
+      };
+
+      // Clear scheduled downgrade
+      subscription.scheduledDowngrade = null;
+      subscription.willCancelAt = null;
+
+      // Update Stripe references
+      if (targetPlanId === "free") {
+        subscription.stripeSubscriptionId = null; // No active Stripe subscription for free tier
+      }
+
+      await subscription.save();
+
+      console.log(
+        `✅ Scheduled downgrade applied: ${fromPlan} → ${targetPlanId}`
+      );
+      return;
+    }
+
+    // SCENARIO 2: No scheduled downgrade (unexpected cancellation or payment failure)
+    // Default to free tier
+    subscription.planId = "free";
+    subscription.planName = "Free Tier";
+    subscription.planPrice = 0;
     subscription.status = "canceled";
     subscription.canceledAt = new Date();
+    subscription.stripeSubscriptionId = null;
+
+    // Apply free tier features
+    subscription.features = PLANS.free.features;
+    subscription.usage = {
+      jobApplications: { limit: 5, used: 0 },
+      profileViews: { limit: 50, used: 0 },
+      jobPostings: { limit: 3, used: 0 },
+      messageThreads: { limit: 10, used: 0 },
+      bulkOperations: { limit: 0, used: 0 },
+    };
+
     await subscription.save();
 
-    // Reset user subscription
-    await User.findByIdAndUpdate(subscription.userId, {
-      "subscription.plan": "free",
-      "subscription.status": "canceled",
-    });
-
     console.log(
-      `Subscription deleted/canceled for user ${subscription.userId}`
+      `✅ Subscription canceled and downgraded to free tier for user ${subscription.userId}`
     );
   } catch (error) {
-    console.error("Error handling subscription deleted:", error);
+    console.error("❌ Error handling subscription deleted:", error);
+    // Don't throw - webhook should return 200 even if processing fails
+    // Stripe will retry if we return error
   }
 }
 

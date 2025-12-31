@@ -1,5 +1,7 @@
-// server/server.js - Updated with Stripe Subscription System
+// server/server.js - Updated with Stripe Subscription System and Socket.io
 const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -8,13 +10,127 @@ require("dotenv").config();
 
 const app = express();
 
+// SOCKET.IO INITIALIZATION
+// ============================================================================
+
+// Create HTTP server
+const server = http.createServer(app);
+
+// Initialize Socket.io with enhanced production settings
+const io = new Server(server, {
+  cors: {
+    origin:
+      process.env.NODE_ENV === "production"
+        ? process.env.CLIENT_URL || "https://your-production-domain.com"
+        : "http://localhost:3000",
+    credentials: true,
+    methods: ["GET", "POST"],
+  },
+  // Connection settings
+  pingTimeout: 60000, // 60s - how long to wait for pong
+  pingInterval: 25000, // 25s - how often to ping
+  upgradeTimeout: 10000, // 10s - upgrade timeout
+  maxHttpBufferSize: 1e6, // 1MB - max message size
+
+  // Performance settings
+  transports: ["websocket", "polling"], // Prefer websocket
+  allowUpgrades: true,
+  perMessageDeflate: {
+    threshold: 1024, // Compress messages > 1KB
+  },
+
+  // Connection limits
+  connectTimeout: 45000, // 45s connection timeout
+
+  // Server-side options
+  serveClient: false, // Don't serve client files
+  cookie: false, // No cookies needed
+});
+
+// Redis adapter for horizontal scaling (optional but recommended)
+if (process.env.REDIS_URL) {
+  const { createAdapter } = require("@socket.io/redis-adapter");
+  const { createClient } = require("redis");
+
+  const pubClient = createClient({ url: process.env.REDIS_URL });
+  const subClient = pubClient.duplicate();
+
+  // Add error handlers to prevent crashes
+  pubClient.on("error", (err) => {
+    console.error("Redis Pub Client Error:", err.message);
+  });
+
+  subClient.on("error", (err) => {
+    console.error("Redis Sub Client Error:", err.message);
+  });
+
+  Promise.all([pubClient.connect(), subClient.connect()])
+    .then(() => {
+      io.adapter(createAdapter(pubClient, subClient));
+      console.log("✅ Redis adapter connected for Socket.IO scaling");
+    })
+    .catch((err) => {
+      console.error("❌ Redis adapter connection failed:", err.message);
+      console.log("⚠️  Running without Redis - single server mode only");
+    });
+} else {
+  console.log("ℹ️  Redis not configured - running in single server mode");
+  console.log("   For production scaling, set REDIS_URL environment variable");
+}
+
+// Socket.io middleware
+const socketAuth = require("./middleware/socketAuth");
+const socketRateLimiter = require("./middleware/socketRateLimiter");
+
+// Apply middleware in order
+io.use(socketRateLimiter); // Rate limiting first
+io.use(socketAuth); // Then authentication
+
+// Initialize monitoring
+const SocketMonitor = require("./utils/socketMonitor");
+const socketMonitor = new SocketMonitor(io);
+
+// Initialize message queue
+const messageQueue = require("./utils/messageQueue");
+
+// Initialize unified socket handler (fixes "Invalid namespace" error)
+require("./sockets/index")(io, socketMonitor);
+
+// Set Socket.io instance for notification service
+const notificationService = require("./utils/notificationService");
+notificationService.setSocketIO(io);
+
+// Socket.IO health check endpoint
+app.get("/api/socket/health", (req, res) => {
+  const stats = socketMonitor.getStats();
+  const queueStats = messageQueue.getStats();
+
+  res.json({
+    success: true,
+    socket: {
+      status: "active",
+      ...stats,
+    },
+    messageQueue: queueStats,
+    redis: process.env.REDIS_URL ? "enabled" : "disabled",
+  });
+});
+
+console.log("✅ Socket.io initialized with production configuration");
+console.log(`   - Rate limiting: enabled`);
+console.log(`   - Monitoring: enabled`);
+console.log(`   - Message queue: enabled`);
+console.log(
+  `   - Redis adapter: ${process.env.REDIS_URL ? "enabled" : "disabled"}`
+);
+
 // Security middleware
 app.use(helmet());
 app.use(
   cors({
     origin:
       process.env.NODE_ENV === "production"
-        ? "https://your-production-domain.com"
+        ? process.env.CLIENT_URL || "https://your-production-domain.com"
         : "http://localhost:3000",
     credentials: true,
   })
@@ -255,8 +371,9 @@ app.get("/api/status", async (req, res) => {
         jobs: "✅ Active",
         applications: "✅ Active",
         matching: "✅ Active",
-        messaging: "🚧 Coming Soon",
-        payments: "🚧 Coming Soon",
+        messaging: "✅ Active",
+        notifications: "✅ Active",
+        subscriptions: "✅ Active",
       },
       timestamp: new Date().toISOString(),
     });
@@ -275,6 +392,8 @@ const profileRoutes = require("./routes/profile");
 const adminRoutes = require("./routes/admin");
 const jobRoutes = require("./routes/jobs");
 const applicationRoutes = require("./routes/applications");
+const messageRoutes = require("./routes/messages");
+const notificationRoutes = require("./routes/notifications");
 
 // ============================================================================
 // MOUNT SUBSCRIPTION ROUTES (Add with other routes)
@@ -290,6 +409,8 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/jobs", jobRoutes);
 app.use("/api/applications", applicationRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
+app.use("/api/messages", messageRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // 404 handler for API routes
 app.all(/^\/api\/.*$/, (req, res) => {
@@ -305,6 +426,9 @@ app.all(/^\/api\/.*$/, (req, res) => {
       "/api/admin/*",
       "/api/jobs/*",
       "/api/applications/*",
+      "/api/subscriptions/*",
+      "/api/messages/*",
+      "/api/notifications/*",
     ],
   });
 });
@@ -405,10 +529,6 @@ app.use((err, req, res, next) => {
 const gracefulShutdown = (signal) => {
   console.log(`Received ${signal}. Starting graceful shutdown...`);
 
-  const server = app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-
   server.close(async () => {
     console.log("HTTP server closed");
 
@@ -456,13 +576,13 @@ process.on("uncaughtException", (err) => {
 // Start server
 const PORT = process.env.PORT || 5000;
 
-const server = app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log("=================================");
   console.log(`🏥 Dockernet API Server Started`);
   console.log(`📡 Port: ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`);
   console.log(`🗄️  Database: ${mongoose.connection.name}`);
-  console.log("=================================");
+  console.log("================================");
   console.log("✅ Features Active:");
   console.log("   • Authentication System");
   console.log("   • Enhanced Doctor Profiles");
@@ -473,7 +593,10 @@ const server = app.listen(PORT, () => {
   console.log("   • Plan Management");
   console.log("   • Feature Access Control");
   console.log("   • Admin Dashboard");
-  console.log("=================================");
+  console.log("   • Real-Time Messaging (Socket.io)");
+  console.log("   • Real-Time Notifications");
+  console.log("   • Online Status Tracking");
+  console.log("================================");
   console.log(`🚀 API Documentation: http://localhost:${PORT}/api/status`);
   console.log(`💊 Health Check: http://localhost:${PORT}/api/health`);
   console.log("=================================");
@@ -495,4 +618,4 @@ const server = app.listen(PORT, () => {
 // Set server timeout
 server.setTimeout(30000); // 30 seconds
 
-module.exports = app;
+module.exports = { app, io, server };

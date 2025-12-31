@@ -80,15 +80,17 @@ const calculatePermissions = (user) => {
   const role = user.role;
   const subscription = user.subscription || {};
 
+  const isPremiumUser =
+    subscription &&
+    subscription.status === "active" &&
+    subscription.planId !== "free";
+
   return {
     canAccessBasicFeatures: ["pending", "active"].includes(accountStatus),
     canAccessActiveFeatures: accountStatus === "active",
     canAccessProfessionalFeatures:
       accountStatus === "active" && verificationStatus.overall === "verified",
-    canAccessPremiumFeatures:
-      accountStatus === "active" &&
-      subscription.status === "active" &&
-      subscription.plan !== "free",
+    canAccessPremiumFeatures: isPremiumUser,
     canAccessAdminFeatures: role === "admin" && accountStatus === "active",
   };
 };
@@ -505,31 +507,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const cancelSubscription = async (reason = "", feedback = "") => {
-    try {
-      const response = await subscriptionAPI.cancelSubscription(
-        reason,
-        feedback
-      );
-      await refreshSubscription();
-      return response.data.data;
-    } catch (error) {
-      console.error("Error canceling subscription:", error);
-      throw error;
-    }
-  };
-
-  const reactivateSubscription = async (planId = null) => {
-    try {
-      const response = await subscriptionAPI.reactivateSubscription(planId);
-      await refreshSubscription();
-      return response.data.data;
-    } catch (error) {
-      console.error("Error reactivating subscription:", error);
-      throw error;
-    }
-  };
-
   const upgradePlan = async (targetPlanId) => {
     try {
       const response = await subscriptionAPI.upgradePlan(targetPlanId);
@@ -548,6 +525,31 @@ export const AuthProvider = ({ children }) => {
       return response.data.data;
     } catch (error) {
       console.error("Error downgrading plan:", error);
+      throw error;
+    }
+  };
+
+  const cancelSubscription = async (reason = "", feedback = "") => {
+    try {
+      const response = await subscriptionAPI.cancelSubscription({
+        reason,
+        feedback,
+      });
+      await refreshSubscription();
+      return response.data.data;
+    } catch (error) {
+      console.error("Error canceling subscription:", error);
+      throw error;
+    }
+  };
+
+  const reactivateSubscription = async () => {
+    try {
+      const response = await subscriptionAPI.reactivateSubscription();
+      await refreshSubscription();
+      return response.data.data;
+    } catch (error) {
+      console.error("Error reactivating subscription:", error);
       throw error;
     }
   };
@@ -578,6 +580,16 @@ export const AuthProvider = ({ children }) => {
       return response.data.data;
     } catch (error) {
       console.error("Error checking feature access:", error);
+      throw error;
+    }
+  };
+
+  const updatePaymentMethod = async () => {
+    try {
+      const response = await subscriptionAPI.updatePaymentMethod();
+      return response.data.data;
+    } catch (error) {
+      console.error("Error updating payment method:", error);
       throw error;
     }
   };
@@ -669,7 +681,8 @@ export const AuthProvider = ({ children }) => {
     } else {
       dispatch({ type: "AUTH_ERROR", payload: null });
     }
-  }, [loadUser]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   useEffect(() => {
     const handleUnauthorized = () => {
@@ -687,7 +700,8 @@ export const AuthProvider = ({ children }) => {
       }, 5 * 60 * 1000);
       return () => clearInterval(interval);
     }
-  }, [state.isAuthenticated, loadUser]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.isAuthenticated]); // Only depend on auth status, not loadUser function
 
   // ============================================================================
   // CONTEXT VALUE
@@ -729,6 +743,7 @@ export const AuthProvider = ({ children }) => {
     getInvoices,
     trackUsage,
     checkFeatureAccess,
+    updatePaymentMethod,
     clearSubscriptionError,
 
     // Permission helpers

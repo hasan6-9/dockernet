@@ -7,6 +7,7 @@ const InvoiceSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
+      sparse: true, // Allow multiple null values
     },
     amount: {
       type: Number,
@@ -251,6 +252,16 @@ const SubscriptionSchema = new mongoose.Schema(
     canReactivate: {
       type: Boolean,
       default: true,
+    },
+
+    // Scheduled Downgrade (for maintaining access until period end)
+    scheduledDowngrade: {
+      targetPlan: {
+        type: String,
+        enum: ["free", "basic", "professional", "enterprise"],
+      },
+      effectiveDate: Date,
+      reason: String,
     },
 
     // Downgrade/Upgrade History

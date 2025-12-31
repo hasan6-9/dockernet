@@ -1,7 +1,7 @@
 // client/src/pages/ApplicationTracking.js - Enhanced with Polling and CSV Export
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { applicationAPI, handleApiError } from "../api";
 import {
   Loader,
@@ -31,6 +31,7 @@ import toast from "react-hot-toast";
 
 const ApplicationTracking = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   // State
   const [applications, setApplications] = useState([]);
@@ -53,9 +54,6 @@ const ApplicationTracking = () => {
   // Modal state
   const [selectedApplication, setSelectedApplication] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [showMessageModal, setShowMessageModal] = useState(false);
-  const [messageText, setMessageText] = useState("");
-  const [sendingMessage, setSendingMessage] = useState(false);
 
   // Action loading states
   const [actionLoading, setActionLoading] = useState({});
@@ -203,26 +201,34 @@ const ApplicationTracking = () => {
     }
   };
 
-  const handleSendMessage = async () => {
-    if (!messageText.trim() || !selectedApplication) return;
-
+  const handleSendMessage = async (application) => {
     try {
-      setSendingMessage(true);
+      setActionLoading((prev) => ({ ...prev, [application._id]: true }));
       setError("");
 
-      await applicationAPI.sendMessage(selectedApplication.id, messageText);
-      setSuccess("Message sent successfully");
-      setMessageText("");
-      setShowMessageModal(false);
+      // Determine the other participant
+      const otherParticipantId =
+        user?.role === "senior"
+          ? application.applicant_id?._id
+          : application.job_id?.posted_by?._id;
 
-      // Reload to get updated messages
-      loadApplications();
-      setTimeout(() => setSuccess(""), 3000);
+      if (!otherParticipantId) {
+        setError("Cannot create conversation - participant not found");
+        return;
+      }
+
+      // Create or get existing conversation
+      const { messageAPI } = await import("../api");
+      const response = await messageAPI.createConversation(otherParticipantId);
+      const conversation = response.data.data;
+
+      // Navigate to messages page with conversation selected
+      navigate(`/messages?conversationId=${conversation._id}`);
     } catch (err) {
       const apiError = handleApiError(err);
-      setError(apiError.message || "Failed to send message");
+      setError(apiError.message || "Failed to start conversation");
     } finally {
-      setSendingMessage(false);
+      setActionLoading((prev) => ({ ...prev, [application._id]: false }));
     }
   };
 
@@ -294,7 +300,7 @@ const ApplicationTracking = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-gray-50 py-4">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
@@ -441,10 +447,7 @@ const ApplicationTracking = () => {
                 onViewDetails={viewDetails}
                 onStatusUpdate={handleStatusUpdate}
                 onWithdraw={handleWithdraw}
-                onMessage={(app) => {
-                  setSelectedApplication(app);
-                  setShowMessageModal(true);
-                }}
+                onMessage={handleSendMessage}
                 actionLoading={actionLoading}
               />
             ))}
@@ -504,26 +507,7 @@ const ApplicationTracking = () => {
               setSelectedApplication(null);
             }}
             onStatusUpdate={handleStatusUpdate}
-            onMessage={(app) => {
-              setShowDetailsModal(false);
-              setSelectedApplication(app);
-              setShowMessageModal(true);
-            }}
-          />
-        )}
-
-        {/* Message Modal */}
-        {showMessageModal && selectedApplication && (
-          <MessageModal
-            application={selectedApplication}
-            messageText={messageText}
-            setMessageText={setMessageText}
-            sending={sendingMessage}
-            onSend={handleSendMessage}
-            onClose={() => {
-              setShowMessageModal(false);
-              setMessageText("");
-            }}
+            onMessage={handleSendMessage}
           />
         )}
       </div>

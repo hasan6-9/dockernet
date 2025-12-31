@@ -646,6 +646,48 @@ const UserSchema = new mongoose.Schema(
       showLastSeen: { type: Boolean, default: true },
     },
 
+    // Online Status and Presence
+    onlineStatus: {
+      status: {
+        type: String,
+        enum: ["online", "away", "offline"],
+        default: "offline",
+      },
+      lastSeen: {
+        type: Date,
+        default: Date.now,
+      },
+    },
+    socketId: {
+      type: String,
+      default: null,
+    },
+
+    // Notification Preferences
+    notificationPreferences: {
+      email: {
+        newMessage: { type: Boolean, default: true },
+        jobApplication: { type: Boolean, default: true },
+        applicationStatus: { type: Boolean, default: true },
+        jobMatch: { type: Boolean, default: true },
+        profileView: { type: Boolean, default: false },
+        reviewReceived: { type: Boolean, default: true },
+        weeklyDigest: { type: Boolean, default: true },
+      },
+      push: {
+        newMessage: { type: Boolean, default: true },
+        jobApplication: { type: Boolean, default: true },
+        applicationStatus: { type: Boolean, default: true },
+        jobMatch: { type: Boolean, default: true },
+        highPriority: { type: Boolean, default: true },
+      },
+      inApp: {
+        all: { type: Boolean, default: true },
+        sound: { type: Boolean, default: true },
+        desktop: { type: Boolean, default: false },
+      },
+    },
+
     // Activity Tracking
     lastActive: {
       type: Date,
@@ -751,7 +793,7 @@ UserSchema.pre("save", async function (next) {
     return next();
   }
 
-  const salt = await bcrypt.genSalt(12);
+  const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
   next();
 });
@@ -856,6 +898,26 @@ UserSchema.methods.addProfileView = async function (
     return;
   }
 
+  // Initialize analytics if not present
+  if (!this.analytics) {
+    this.analytics = {
+      views: { total: 0, thisMonth: 0, thisWeek: 0 },
+      profileViews: [],
+      searchAppearances: { total: 0, thisMonth: 0 },
+      contactAttempts: { total: 0, thisMonth: 0 },
+    };
+  }
+
+  // Initialize profileViews array if not present
+  if (!this.analytics.profileViews) {
+    this.analytics.profileViews = [];
+  }
+
+  // Initialize views object if not present
+  if (!this.analytics.views) {
+    this.analytics.views = { total: 0, thisMonth: 0, thisWeek: 0 };
+  }
+
   // Don't count duplicate views from same user within 24 hours
   if (viewer) {
     const recentView = this.analytics.profileViews.find(
@@ -938,6 +1000,79 @@ UserSchema.methods.updateRating = function () {
     breakdown,
     categories,
   };
+};
+
+// Method to calculate average response time based on messages
+UserSchema.methods.calculateResponseTime = async function () {
+  try {
+    const Conversation = mongoose.model("Conversation");
+    const Message = mongoose.model("Message");
+
+    // Get all conversations where this user is a participant
+    const conversations = await Conversation.find({
+      participants: this._id,
+    }).select("_id");
+
+    if (conversations.length === 0) {
+      // No conversations, keep default or set to null
+      return null;
+    }
+
+    const conversationIds = conversations.map((c) => c._id);
+
+    // Get all messages in these conversations
+    const messages = await Message.find({
+      conversation: { $in: conversationIds },
+    })
+      .sort({ createdAt: 1 })
+      .select("sender createdAt conversation");
+
+    // Calculate response times
+    const responseTimes = [];
+    const conversationMessages = {};
+
+    // Group messages by conversation
+    messages.forEach((msg) => {
+      const convId = msg.conversation.toString();
+      if (!conversationMessages[convId]) {
+        conversationMessages[convId] = [];
+      }
+      conversationMessages[convId].push(msg);
+    });
+
+    // Calculate response time for each conversation
+    Object.values(conversationMessages).forEach((convMsgs) => {
+      for (let i = 1; i < convMsgs.length; i++) {
+        const prevMsg = convMsgs[i - 1];
+        const currentMsg = convMsgs[i];
+
+        // If current message is from this user and previous was from someone else
+        if (
+          currentMsg.sender.toString() === this._id.toString() &&
+          prevMsg.sender.toString() !== this._id.toString()
+        ) {
+          const responseTime =
+            (new Date(currentMsg.createdAt) - new Date(prevMsg.createdAt)) /
+            (1000 * 60 * 60); // Convert to hours
+          responseTimes.push(responseTime);
+        }
+      }
+    });
+
+    if (responseTimes.length === 0) {
+      return null;
+    }
+
+    // Calculate average response time
+    const avgResponseTime =
+      responseTimes.reduce((sum, time) => sum + time, 0) / responseTimes.length;
+
+    // Round to 1 decimal place
+    return Math.round(avgResponseTime * 10) / 10;
+  } catch (error) {
+    console.error("Error calculating response time:", error);
+    return null;
+  }
 };
 
 // Method to update job statistics

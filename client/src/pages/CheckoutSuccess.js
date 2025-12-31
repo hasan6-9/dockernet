@@ -55,7 +55,8 @@ const CheckoutSuccess = () => {
     };
 
     handleSuccess();
-  }, [refreshSubscription, navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-4">

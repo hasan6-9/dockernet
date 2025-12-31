@@ -3,6 +3,7 @@ const User = require("../models/User");
 const cloudinary = require("cloudinary").v2;
 const multer = require("multer");
 const { validationResult } = require("express-validator");
+const notificationService = require("../utils/notificationService");
 
 // Configure Cloudinary
 cloudinary.config({
@@ -173,6 +174,31 @@ exports.getPublicProfile = async (req, res) => {
     const viewerId = req.user ? req.user.id : null;
     const anonymousId = req.headers["x-anonymous-id"] || null;
     await user.addProfileView(viewerId, anonymousId);
+
+    // Send notification to profile owner if viewed by logged-in user
+    if (viewerId && viewerId !== user._id.toString()) {
+      try {
+        await notificationService.createProfileViewNotification(
+          user._id,
+          viewerId
+        );
+      } catch (notifError) {
+        console.error("Error sending profile view notification:", notifError);
+        // Don't fail the request if notification fails
+      }
+    }
+
+    // Calculate real-time response time
+    try {
+      const responseTime = await user.calculateResponseTime();
+      if (responseTime !== null) {
+        user.job_statistics.response_time_hours = responseTime;
+        await user.save({ validateBeforeSave: false });
+      }
+    } catch (responseError) {
+      console.error("Error calculating response time:", responseError);
+      // Don't fail the request if response time calculation fails
+    }
 
     // Filter sensitive information based on privacy settings
     const publicProfile = user.toObject();

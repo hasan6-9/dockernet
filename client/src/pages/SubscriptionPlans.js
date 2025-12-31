@@ -11,12 +11,17 @@ import {
   Award,
   Crown,
   Sparkles,
+  ArrowLeft,
 } from "lucide-react";
 
 const SubscriptionPlans = () => {
   const navigate = useNavigate();
-  const { getSubscriptionPlans, createCheckoutSession, subscription } =
-    useAuth();
+  const {
+    getSubscriptionPlans,
+    createCheckoutSession,
+    cancelSubscription,
+    subscription,
+  } = useAuth();
 
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,8 +48,61 @@ const SubscriptionPlans = () => {
   }, [getSubscriptionPlans]);
 
   const handleSelectPlan = async (planId) => {
+    // Handle downgrade to free tier
     if (planId === "free") {
-      navigate("/dashboard");
+      // Show confirmation dialog
+      const confirmed = window.confirm(
+        "⚠️ Downgrade to Free Tier?\n\n" +
+          "You will lose access to:\n" +
+          "• Unlimited job applications\n" +
+          "• Advanced search features\n" +
+          "• Direct messaging\n" +
+          "• Priority support\n" +
+          "• All premium features\n\n" +
+          "Your usage limits will be reset to:\n" +
+          "• 5 job applications/month\n" +
+          "• 3 job postings/month\n\n" +
+          "Are you sure you want to continue?"
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        setCheckoutLoading(true);
+        setSelectedPlan(planId);
+
+        const response = await cancelSubscription(
+          "Downgrading to free tier",
+          ""
+        );
+        setError("");
+
+        // Show appropriate success message based on response
+        const successMessage = response.willCancelAt
+          ? `✅ Subscription Scheduled for Cancellation!\n\nYou'll retain ${
+              subscription.planName
+            } access until ${new Date(
+              response.willCancelAt
+            ).toLocaleDateString()}.\n\nAfter that date, you'll be automatically downgraded to the Free Tier.`
+          : "✅ Successfully downgraded to Free Tier!\n\nYour subscription has been canceled and you now have access to free tier features.";
+
+        alert(successMessage);
+
+        // Navigate to dashboard after successful cancellation
+        setTimeout(() => {
+          navigate("/dashboard");
+        }, 500);
+      } catch (err) {
+        console.error("Error downgrading to free:", err);
+        setError(
+          err.response?.data?.message || "Failed to downgrade to free tier"
+        );
+      } finally {
+        setCheckoutLoading(false);
+        setSelectedPlan(null);
+      }
       return;
     }
 
@@ -110,8 +168,17 @@ const SubscriptionPlans = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 py-12 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 pt-6 pb-12 px-4">
       <div className="max-w-7xl mx-auto">
+        {/* Back to Dashboard Button */}
+        <button
+          onClick={() => navigate("/dashboard")}
+          className="mb-6 flex items-center gap-2 text-gray-600 hover:text-blue-600 font-medium transition-colors group"
+        >
+          <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+          Back to Dashboard
+        </button>
+
         {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">

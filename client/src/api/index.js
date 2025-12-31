@@ -1,4 +1,4 @@
-// client/src/api/index.js - Consolidated API Service Layer (Updated with Subscriptions)
+// client/src/api/index.js - UPDATED WITH ADMIN JOB/APP ENDPOINTS
 import axios from "axios";
 
 // ============================================================================
@@ -16,7 +16,7 @@ const api = axios.create({
   withCredentials: true,
 });
 
-// Token management (keep your existing implementation)
+// Token management
 let authToken = null;
 
 export const setAuthToken = (token) => {
@@ -34,7 +34,7 @@ export const clearAuthToken = () => {
   delete api.defaults.headers.common["Authorization"];
 };
 
-// Request/Response interceptors (keep your existing implementation)
+// Request/Response interceptors
 api.interceptors.request.use(
   (config) => {
     if (authToken) {
@@ -99,66 +99,75 @@ api.interceptors.response.use(
 );
 
 // ============================================================================
-// SUBSCRIPTION API
+// ADMIN API - ENHANCED WITH JOB & APPLICATION MANAGEMENT
 // ============================================================================
-export const subscriptionAPI = {
-  // Get all available plans (public)
-  getPlans: () => api.get("/subscriptions/plans"),
+export const adminAPI = {
+  // === User Verification (Existing) ===
+  getDashboard: () => api.get("/admin/dashboard"),
+  getVerificationStats: (timeframe = "30d") =>
+    api.get(`/admin/verification/stats?timeframe=${timeframe}`),
 
-  // Create checkout session for payment
-  createCheckoutSession: (planId, billingCycle = "monthly") =>
-    api.post("/subscriptions/create-checkout-session", {
-      planId,
-      billingCycle,
+  getPendingVerifications: (params = {}) => {
+    const queryParams = new URLSearchParams();
+    if (params.type) queryParams.append("type", params.type);
+    if (params.page) queryParams.append("page", params.page);
+    if (params.limit) queryParams.append("limit", params.limit);
+
+    const queryString = queryParams.toString();
+    return api.get(
+      `/admin/verification/pending${queryString ? `?${queryString}` : ""}`
+    );
+  },
+
+  getProfileForVerification: (userId) =>
+    api.get(`/admin/verification/profile/${userId}`),
+
+  verifyIdentity: (userId, verificationData) =>
+    api.put(`/admin/verification/identity/${userId}`, verificationData),
+  verifyMedicalLicense: (userId, verificationData) =>
+    api.put(`/admin/verification/medical-license/${userId}`, verificationData),
+  verifyBackgroundCheck: (userId, verificationData) =>
+    api.put(`/admin/verification/background-check/${userId}`, verificationData),
+
+  bulkVerification: (bulkData) => api.put("/admin/verification/bulk", bulkData),
+
+  // === Job Management (NEW) ===
+  getAllJobs: (params = {}) => {
+    const queryParams = new URLSearchParams();
+    if (params.page) queryParams.append("page", params.page);
+    if (params.limit) queryParams.append("limit", params.limit);
+    if (params.status) queryParams.append("status", params.status);
+    if (params.search) queryParams.append("search", params.search);
+
+    const queryString = queryParams.toString();
+    return api.get(`/jobs/admin/all${queryString ? `?${queryString}` : ""}`);
+  },
+
+  adminJobAction: (jobId, action, reason = "") =>
+    api.put(`/jobs/admin/${jobId}/action`, { action, reason }),
+
+  bulkJobAction: (jobIds, status) =>
+    api.post("/jobs/bulk/status", { jobIds, status }),
+
+  // === Application Management (NEW) ===
+  getAllApplications: (params = {}) => {
+    const queryParams = new URLSearchParams();
+    if (params.page) queryParams.append("page", params.page);
+    if (params.limit) queryParams.append("limit", params.limit);
+    if (params.status) queryParams.append("status", params.status);
+    if (params.search) queryParams.append("search", params.search);
+
+    const queryString = queryParams.toString();
+    return api.get(
+      `/applications/admin/all${queryString ? `?${queryString}` : ""}`
+    );
+  },
+
+  resolveDispute: (applicationId, resolution, notes = "") =>
+    api.put(`/applications/admin/${applicationId}/resolve-dispute`, {
+      resolution,
+      notes,
     }),
-
-  // Get current user's subscription
-  getCurrentSubscription: () => api.get("/subscriptions/current"),
-
-  // Cancel active subscription
-  cancelSubscription: (reason = "", feedback = "") =>
-    api.post("/subscriptions/cancel", {
-      reason,
-      feedback,
-    }),
-
-  // Reactivate canceled subscription
-  reactivateSubscription: (planId = null) =>
-    api.post("/subscriptions/reactivate", {
-      ...(planId && { planId }),
-    }),
-
-  // Get update payment method setup intent
-  updatePaymentMethod: () => api.post("/subscriptions/update-payment-method"),
-
-  // Get subscription invoices/payment history
-  getInvoices: (page = 1, limit = 10) =>
-    api.get("/subscriptions/invoices", {
-      params: { page, limit },
-    }),
-
-  // Upgrade to higher tier plan
-  upgradePlan: (targetPlanId) =>
-    api.post("/subscriptions/upgrade", {
-      targetPlanId,
-    }),
-
-  // Downgrade to lower tier plan
-  downgradePlan: (targetPlanId) =>
-    api.post("/subscriptions/downgrade", {
-      targetPlanId,
-    }),
-
-  // Track usage of limited features
-  trackUsage: (usageType, amount = 1) =>
-    api.post("/subscriptions/track-usage", {
-      usageType,
-      amount,
-    }),
-
-  // Check if feature is accessible in current plan
-  checkFeatureAccess: (featureName) =>
-    api.get(`/subscriptions/feature/${featureName}`),
 };
 
 // ============================================================================
@@ -349,40 +358,6 @@ export const applicationAPI = {
 };
 
 // ============================================================================
-// ADMIN API
-// ============================================================================
-
-export const adminAPI = {
-  getDashboard: () => api.get("/admin/dashboard"),
-  getVerificationStats: (timeframe = "30d") =>
-    api.get(`/admin/verification/stats?timeframe=${timeframe}`),
-
-  getPendingVerifications: (params = {}) => {
-    const queryParams = new URLSearchParams();
-    if (params.type) queryParams.append("type", params.type);
-    if (params.page) queryParams.append("page", params.page);
-    if (params.limit) queryParams.append("limit", params.limit);
-
-    const queryString = queryParams.toString();
-    return api.get(
-      `/admin/verification/pending${queryString ? `?${queryString}` : ""}`
-    );
-  },
-
-  getProfileForVerification: (userId) =>
-    api.get(`/admin/verification/profile/${userId}`),
-
-  verifyIdentity: (userId, verificationData) =>
-    api.put(`/admin/verification/identity/${userId}`, verificationData),
-  verifyMedicalLicense: (userId, verificationData) =>
-    api.put(`/admin/verification/medical-license/${userId}`, verificationData),
-  verifyBackgroundCheck: (userId, verificationData) =>
-    api.put(`/admin/verification/background-check/${userId}`, verificationData),
-
-  bulkVerification: (bulkData) => api.put("/admin/verification/bulk", bulkData),
-};
-
-// ============================================================================
 // MATCHING & RECOMMENDATIONS API
 // ============================================================================
 
@@ -394,6 +369,131 @@ export const matchingAPI = {
     api.get(`/matching/candidates/${jobId}`, { params }),
   getAnalytics: (jobId) => api.get(`/matching/analytics/${jobId}`),
   bulkCalculate: (jobIds) => api.post("/matching/bulk", { jobIds }),
+};
+
+// ============================================================================
+// SUBSCRIPTION API
+// ============================================================================
+export const subscriptionAPI = {
+  getPlans: () => api.get("/subscriptions/plans"),
+  createCheckoutSession: (planId, billingCycle = "monthly") =>
+    api.post("/subscriptions/create-checkout-session", {
+      planId,
+      billingCycle,
+    }),
+  getCurrentSubscription: () => api.get("/subscriptions/current"),
+  cancelSubscription: (reason = "", feedback = "") =>
+    api.post("/subscriptions/cancel", {
+      reason,
+      feedback,
+    }),
+  reactivateSubscription: (planId = null) =>
+    api.post("/subscriptions/reactivate", {
+      ...(planId && { planId }),
+    }),
+  updatePaymentMethod: () => api.post("/subscriptions/update-payment-method"),
+  getInvoices: (page = 1, limit = 10) =>
+    api.get("/subscriptions/invoices", {
+      params: { page, limit },
+    }),
+  upgradePlan: (targetPlanId) =>
+    api.post("/subscriptions/upgrade", {
+      targetPlanId,
+    }),
+  downgradePlan: (targetPlanId) =>
+    api.post("/subscriptions/downgrade", {
+      targetPlanId,
+    }),
+  trackUsage: (usageType, amount = 1) =>
+    api.post("/subscriptions/track-usage", {
+      usageType,
+      amount,
+    }),
+  checkFeatureAccess: (featureName) =>
+    api.get(`/subscriptions/feature/${featureName}`),
+};
+
+// ============================================================================
+// MESSAGING API
+// ============================================================================
+export const messageAPI = {
+  // Conversations
+  getConversations: (page = 1, limit = 20) =>
+    api.get("/messages/conversations", { params: { page, limit } }),
+  getConversation: (conversationId) =>
+    api.get(`/messages/conversations/${conversationId}`),
+  createConversation: (participantId, relatedTo = null) =>
+    api.post("/messages/conversations", { participantId, relatedTo }),
+  archiveConversation: (conversationId) =>
+    api.put(`/messages/conversations/${conversationId}/archive`),
+  muteConversation: (conversationId) =>
+    api.put(`/messages/conversations/${conversationId}/mute`),
+
+  // Messages
+  getMessages: (conversationId, page = 1, limit = 20) =>
+    api.get(`/messages/conversations/${conversationId}/messages`, {
+      params: { page, limit },
+    }),
+  sendMessage: (
+    conversationId,
+    content,
+    messageType = "text",
+    fileUrl = null,
+    fileName = null,
+    fileSize = null,
+    replyTo = null
+  ) =>
+    api.post(`/messages/conversations/${conversationId}/messages`, {
+      content,
+      messageType,
+      fileUrl,
+      fileName,
+      fileSize,
+      replyTo,
+    }),
+  editMessage: (messageId, content) =>
+    api.put(`/messages/${messageId}`, { content }),
+  deleteMessage: (messageId) => api.delete(`/messages/${messageId}`),
+  markConversationAsRead: (conversationId) =>
+    api.put(`/messages/conversations/${conversationId}/read`),
+
+  // File upload
+  uploadFile: (file, onProgress) => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    return api.post("/messages/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress: (progressEvent) => {
+        if (onProgress && progressEvent.total) {
+          const percentCompleted = Math.round(
+            (progressEvent.loaded * 100) / progressEvent.total
+          );
+          onProgress(percentCompleted);
+        }
+      },
+    });
+  },
+};
+
+// ============================================================================
+// NOTIFICATION API
+// ============================================================================
+export const notificationAPI = {
+  // Notifications
+  getNotifications: (page = 1, limit = 20, filters = {}) =>
+    api.get("/notifications", { params: { page, limit, ...filters } }),
+  getUnreadCount: () => api.get("/notifications/unread-count"),
+  markAsRead: (notificationId) =>
+    api.put(`/notifications/${notificationId}/read`),
+  markAllAsRead: () => api.put("/notifications/mark-all-read"),
+  deleteNotification: (notificationId) =>
+    api.delete(`/notifications/${notificationId}`),
+
+  // Preferences
+  getPreferences: () => api.get("/notifications/preferences"),
+  updatePreferences: (preferences) =>
+    api.put("/notifications/preferences", preferences),
 };
 
 // ============================================================================

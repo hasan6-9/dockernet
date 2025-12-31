@@ -1,4 +1,4 @@
-// client/src/pages/AdminDashboard.js - PROFESSIONAL PRODUCTION VERSION
+// client/src/pages/AdminDashboard.js - PROFESSIONAL PRODUCTION VERSION WITH JOB & APPLICATION MANAGEMENT
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import { adminAPI } from "../api";
@@ -37,6 +37,13 @@ import {
   X,
   Check,
   Loader,
+  Star,
+  DollarSign,
+  Package,
+  MessageSquare,
+  PlayCircle,
+  PauseCircle,
+  Ban,
 } from "lucide-react";
 
 const AdminDashboard = () => {
@@ -52,6 +59,26 @@ const AdminDashboard = () => {
   const [allUsers, setAllUsers] = useState([]);
   const [verificationStats, setVerificationStats] = useState(null);
   const [refreshInterval, setRefreshInterval] = useState(null);
+
+  // Job management states
+  const [allJobs, setAllJobs] = useState([]);
+  const [selectedJobs, setSelectedJobs] = useState([]);
+  const [expandedJob, setExpandedJob] = useState(null);
+  const [jobsPagination, setJobsPagination] = useState({
+    page: 1,
+    total: 0,
+    pages: 0,
+  });
+
+  // Application management states
+  const [allApplications, setAllApplications] = useState([]);
+  const [selectedApplications, setSelectedApplications] = useState([]);
+  const [expandedApplication, setExpandedApplication] = useState(null);
+  const [applicationsPagination, setApplicationsPagination] = useState({
+    page: 1,
+    total: 0,
+    pages: 0,
+  });
 
   // UI states
   const [filters, setFilters] = useState({
@@ -92,6 +119,10 @@ const AdminDashboard = () => {
       fetchPendingVerifications();
     } else if (activeTab === "users" && isAdmin()) {
       fetchAllUsers();
+    } else if (activeTab === "jobs" && isAdmin()) {
+      fetchAllJobs();
+    } else if (activeTab === "applications" && isAdmin()) {
+      fetchAllApplications();
     }
   }, [filters, activeTab, isAdmin]);
 
@@ -287,6 +318,150 @@ const AdminDashboard = () => {
       setTimeout(() => setError(""), 5000);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ============================================================================
+  // JOB MANAGEMENT API FUNCTIONS
+  // ============================================================================
+
+  const fetchAllJobs = async (silent = false) => {
+    try {
+      if (!silent) setLoading(true);
+      const params = {
+        page: filters.page,
+        limit: filters.limit,
+        status: filters.status !== "all" ? filters.status : undefined,
+        search: filters.search || undefined,
+      };
+
+      const response = await adminAPI.getAllJobs(params);
+      setAllJobs(response.data.data);
+      setJobsPagination(response.data.pagination);
+      setError("");
+    } catch (err) {
+      console.error("Error fetching jobs:", err);
+      if (!silent)
+        setError(err.response?.data?.message || "Failed to fetch jobs");
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  };
+
+  const handleJobAction = async (jobId, action, reason = "") => {
+    setShowConfirmModal(null);
+
+    try {
+      setLoading(true);
+      const response = await adminAPI.adminJobAction(jobId, action, reason);
+      setSuccess(response.data.message || `Job ${action}ed successfully`);
+
+      // Refresh jobs list
+      await fetchAllJobs(true);
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (err) {
+      console.error("Error with job action:", err);
+      setError(err.response?.data?.message || `Failed to ${action} job`);
+      setTimeout(() => setError(""), 5000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBulkJobAction = async (status) => {
+    if (selectedJobs.length === 0) {
+      setError("Please select jobs to update");
+      setTimeout(() => setError(""), 3000);
+      return;
+    }
+
+    setShowConfirmModal(null);
+
+    try {
+      setLoading(true);
+      const response = await adminAPI.bulkJobAction(selectedJobs, status);
+      setSuccess(`Bulk job update completed: ${response.data.message}`);
+
+      setSelectedJobs([]);
+      await fetchAllJobs(true);
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (err) {
+      console.error("Error with bulk job action:", err);
+      setError(err.response?.data?.message || "Bulk job action failed");
+      setTimeout(() => setError(""), 5000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============================================================================
+  // APPLICATION MANAGEMENT API FUNCTIONS
+  // ============================================================================
+
+  const fetchAllApplications = async (silent = false) => {
+    try {
+      if (!silent) setLoading(true);
+      const params = {
+        page: filters.page,
+        limit: filters.limit,
+        status: filters.status !== "all" ? filters.status : undefined,
+        search: filters.search || undefined,
+      };
+
+      const response = await adminAPI.getAllApplications(params);
+      setAllApplications(response.data.data);
+      setApplicationsPagination(response.data.pagination);
+      setError("");
+    } catch (err) {
+      console.error("Error fetching applications:", err);
+      if (!silent)
+        setError(err.response?.data?.message || "Failed to fetch applications");
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  };
+
+  const handleResolveDispute = async (
+    applicationId,
+    resolution,
+    notes = ""
+  ) => {
+    setShowConfirmModal(null);
+
+    try {
+      setLoading(true);
+      const response = await adminAPI.resolveDispute(
+        applicationId,
+        resolution,
+        notes
+      );
+      setSuccess(response.data.message || "Dispute resolved successfully");
+
+      // Refresh applications list
+      await fetchAllApplications(true);
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (err) {
+      console.error("Error resolving dispute:", err);
+      setError(err.response?.data?.message || "Failed to resolve dispute");
+      setTimeout(() => setError(""), 5000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectAllJobs = () => {
+    if (selectedJobs.length === allJobs.length) {
+      setSelectedJobs([]);
+    } else {
+      setSelectedJobs(allJobs.map((j) => j._id));
+    }
+  };
+
+  const handleSelectAllApplications = () => {
+    if (selectedApplications.length === allApplications.length) {
+      setSelectedApplications([]);
+    } else {
+      setSelectedApplications(allApplications.map((a) => a._id));
     }
   };
 
@@ -1348,6 +1523,631 @@ const AdminDashboard = () => {
     </div>
   );
 
+  // ============================================================================
+  // JOB MANAGEMENT TAB
+  // ============================================================================
+
+  const JobManagementTab = () => (
+    <div className="space-y-6">
+      {/* Filters */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="flex flex-col space-y-4">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="flex flex-col sm:flex-row gap-4 flex-1">
+              <div className="relative flex-1">
+                <Search className="w-5 h-5 absolute left-3 top-3 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search jobs by title, category..."
+                  value={filters.search}
+                  onChange={(e) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      search: e.target.value,
+                      page: 1,
+                    }))
+                  }
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <select
+                value={filters.status}
+                onChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    status: e.target.value,
+                    page: 1,
+                  }))
+                }
+                className="border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All Status</option>
+                <option value="active">Active</option>
+                <option value="paused">Paused</option>
+                <option value="closed">Closed</option>
+                <option value="draft">Draft</option>
+              </select>
+
+              <select
+                value={filters.limit}
+                onChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    limit: parseInt(e.target.value),
+                    page: 1,
+                  }))
+                }
+                className="border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="10">10 per page</option>
+                <option value="20">20 per page</option>
+                <option value="50">50 per page</option>
+              </select>
+            </div>
+
+            <button
+              onClick={() => fetchAllJobs()}
+              disabled={loading}
+              className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 font-medium"
+            >
+              <RefreshCw
+                className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
+              />
+              <span>Refresh</span>
+            </button>
+          </div>
+
+          {/* Bulk Actions Bar */}
+          {selectedJobs.length > 0 && (
+            <div className="flex items-center justify-between bg-blue-50 border-2 border-blue-200 p-4 rounded-lg">
+              <div className="flex items-center space-x-4">
+                <CheckSquare className="w-5 h-5 text-blue-600" />
+                <span className="text-blue-900 font-semibold">
+                  {selectedJobs.length} job
+                  {selectedJobs.length !== 1 ? "s" : ""} selected
+                </span>
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() =>
+                    setShowConfirmModal({
+                      type: "bulk-activate",
+                      title: "Bulk Activate Jobs",
+                      message: `Activate ${selectedJobs.length} job(s)?`,
+                      action: () => handleBulkJobAction("active"),
+                    })
+                  }
+                  className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 font-medium"
+                >
+                  <PlayCircle className="w-4 h-4" />
+                  <span>Activate</span>
+                </button>
+                <button
+                  onClick={() =>
+                    setShowConfirmModal({
+                      type: "bulk-pause",
+                      title: "Bulk Pause Jobs",
+                      message: `Pause ${selectedJobs.length} job(s)?`,
+                      action: () => handleBulkJobAction("paused"),
+                    })
+                  }
+                  className="flex items-center space-x-2 bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 font-medium"
+                >
+                  <PauseCircle className="w-4 h-4" />
+                  <span>Pause</span>
+                </button>
+                <button
+                  onClick={() =>
+                    setShowConfirmModal({
+                      type: "bulk-close",
+                      title: "Bulk Close Jobs",
+                      message: `Close ${selectedJobs.length} job(s)?`,
+                      action: () => handleBulkJobAction("closed"),
+                    })
+                  }
+                  className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 font-medium"
+                >
+                  <Ban className="w-4 h-4" />
+                  <span>Close</span>
+                </button>
+                <button
+                  onClick={() => setSelectedJobs([])}
+                  className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300 font-medium"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Jobs List */}
+      <div className="space-y-4">
+        {loading ? (
+          <div className="space-y-4">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div
+                key={index}
+                className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 animate-pulse"
+              >
+                <div className="flex items-center space-x-4">
+                  <div className="w-16 h-16 bg-gray-200 rounded-lg"></div>
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : allJobs.length > 0 ? (
+          <>
+            {/* Select All */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={
+                    selectedJobs.length === allJobs.length && allJobs.length > 0
+                  }
+                  onChange={handleSelectAllJobs}
+                  className="w-5 h-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span className="font-medium text-gray-900">
+                  Select All ({allJobs.length} jobs)
+                </span>
+              </label>
+            </div>
+
+            {allJobs.map((job) => (
+              <div
+                key={job._id}
+                className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
+              >
+                <div className="flex items-start space-x-4">
+                  <input
+                    type="checkbox"
+                    checked={selectedJobs.includes(job._id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedJobs((prev) => [...prev, job._id]);
+                      } else {
+                        setSelectedJobs((prev) =>
+                          prev.filter((id) => id !== job._id)
+                        );
+                      }
+                    }}
+                    className="mt-1 w-5 h-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                  />
+
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h4 className="text-xl font-bold text-gray-900">
+                          {job.title}
+                        </h4>
+                        <p className="text-blue-600 font-semibold">
+                          {job.category}
+                        </p>
+                        <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600">
+                          <span className="flex items-center">
+                            <User className="w-4 h-4 mr-1" />
+                            {job.posted_by?.firstName} {job.posted_by?.lastName}
+                          </span>
+                          <span className="flex items-center">
+                            <DollarSign className="w-4 h-4 mr-1" />$
+                            {job.budget?.amount || 0}
+                          </span>
+                          <span className="flex items-center">
+                            <Calendar className="w-4 h-4 mr-1" />
+                            {new Date(job.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <StatusBadge status={job.status} />
+                        {job.featured && (
+                          <div className="mt-2">
+                            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800 border border-yellow-200 flex items-center">
+                              <Star className="w-3 h-3 mr-1" />
+                              Featured
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <p className="text-gray-700 mb-4 line-clamp-2">
+                      {job.description}
+                    </p>
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                      <div className="flex items-center space-x-4 text-sm text-gray-600">
+                        <span className="flex items-center">
+                          <Eye className="w-4 h-4 mr-1" />
+                          {job.views_count || 0} views
+                        </span>
+                        <span className="flex items-center">
+                          <FileText className="w-4 h-4 mr-1" />
+                          {job.applications_count || 0} applications
+                        </span>
+                      </div>
+
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() =>
+                            setShowConfirmModal({
+                              type: "approve-job",
+                              title: "Approve Job",
+                              message: `Approve and activate job: ${job.title}?`,
+                              action: () => handleJobAction(job._id, "approve"),
+                            })
+                          }
+                          className="flex items-center space-x-2 bg-green-600 text-white px-3 py-2 rounded-md hover:bg-green-700 text-sm font-medium"
+                          disabled={loading}
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          <span>Approve</span>
+                        </button>
+                        <button
+                          onClick={() =>
+                            setShowConfirmModal({
+                              type: "reject-job",
+                              title: "Reject Job",
+                              message: `Reject and close job: ${job.title}?`,
+                              action: () => handleJobAction(job._id, "reject"),
+                            })
+                          }
+                          className="flex items-center space-x-2 bg-red-600 text-white px-3 py-2 rounded-md hover:bg-red-700 text-sm font-medium"
+                          disabled={loading}
+                        >
+                          <XCircle className="w-4 h-4" />
+                          <span>Reject</span>
+                        </button>
+                        {!job.featured && (
+                          <button
+                            onClick={() => handleJobAction(job._id, "feature")}
+                            className="flex items-center space-x-2 bg-yellow-600 text-white px-3 py-2 rounded-md hover:bg-yellow-700 text-sm font-medium"
+                            disabled={loading}
+                          >
+                            <Star className="w-4 h-4" />
+                            <span>Feature</span>
+                          </button>
+                        )}
+                        {job.featured && (
+                          <button
+                            onClick={() =>
+                              handleJobAction(job._id, "unfeature")
+                            }
+                            className="flex items-center space-x-2 bg-gray-600 text-white px-3 py-2 rounded-md hover:bg-gray-700 text-sm font-medium"
+                            disabled={loading}
+                          >
+                            <X className="w-4 h-4" />
+                            <span>Unfeature</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Pagination */}
+            {jobsPagination.pages > 1 && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  Showing {(jobsPagination.page - 1) * filters.limit + 1} to{" "}
+                  {Math.min(
+                    jobsPagination.page * filters.limit,
+                    jobsPagination.total
+                  )}{" "}
+                  of {jobsPagination.total} jobs
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() =>
+                      setFilters((prev) => ({ ...prev, page: prev.page - 1 }))
+                    }
+                    disabled={jobsPagination.page === 1}
+                    className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <span className="px-4 py-2 text-gray-700">
+                    Page {jobsPagination.page} of {jobsPagination.pages}
+                  </span>
+                  <button
+                    onClick={() =>
+                      setFilters((prev) => ({ ...prev, page: prev.page + 1 }))
+                    }
+                    disabled={jobsPagination.page === jobsPagination.pages}
+                    className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-16 text-center">
+            <Briefcase className="w-20 h-20 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-2xl font-bold text-gray-900 mb-2">
+              No jobs found
+            </h3>
+            <p className="text-gray-600">Try adjusting your filters</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ============================================================================
+  // APPLICATION MANAGEMENT TAB
+  // ============================================================================
+
+  const ApplicationManagementTab = () => (
+    <div className="space-y-6">
+      {/* Filters */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="flex flex-col space-y-4">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="flex flex-col sm:flex-row gap-4 flex-1">
+              <div className="relative flex-1">
+                <Search className="w-5 h-5 absolute left-3 top-3 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search by applicant or job..."
+                  value={filters.search}
+                  onChange={(e) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      search: e.target.value,
+                      page: 1,
+                    }))
+                  }
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <select
+                value={filters.status}
+                onChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    status: e.target.value,
+                    page: 1,
+                  }))
+                }
+                className="border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All Status</option>
+                <option value="submitted">Submitted</option>
+                <option value="under_review">Under Review</option>
+                <option value="shortlisted">Shortlisted</option>
+                <option value="interview_scheduled">Interview Scheduled</option>
+                <option value="accepted">Accepted</option>
+                <option value="rejected">Rejected</option>
+                <option value="withdrawn">Withdrawn</option>
+              </select>
+
+              <select
+                value={filters.limit}
+                onChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    limit: parseInt(e.target.value),
+                    page: 1,
+                  }))
+                }
+                className="border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="10">10 per page</option>
+                <option value="20">20 per page</option>
+                <option value="50">50 per page</option>
+              </select>
+            </div>
+
+            <button
+              onClick={() => fetchAllApplications()}
+              disabled={loading}
+              className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 font-medium"
+            >
+              <RefreshCw
+                className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
+              />
+              <span>Refresh</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Applications List */}
+      <div className="space-y-4">
+        {loading ? (
+          <div className="space-y-4">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div
+                key={index}
+                className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 animate-pulse"
+              >
+                <div className="flex items-center space-x-4">
+                  <div className="w-16 h-16 bg-gray-200 rounded-full"></div>
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : allApplications.length > 0 ? (
+          <>
+            {allApplications.map((app) => (
+              <div
+                key={app._id}
+                className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
+              >
+                <div className="flex items-start space-x-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                    <User className="w-6 h-6 text-white" />
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h4 className="text-lg font-bold text-gray-900">
+                          {app.applicant_id?.firstName}{" "}
+                          {app.applicant_id?.lastName}
+                        </h4>
+                        <p className="text-blue-600 font-medium">
+                          Applied for: {app.job_id?.title || "Unknown Job"}
+                        </p>
+                        <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600">
+                          <span className="flex items-center">
+                            <Mail className="w-4 h-4 mr-1" />
+                            {app.applicant_id?.email}
+                          </span>
+                          <span className="flex items-center">
+                            <Calendar className="w-4 h-4 mr-1" />
+                            {new Date(app.createdAt).toLocaleDateString()}
+                          </span>
+                          {app.match_score && (
+                            <span className="flex items-center">
+                              <Award className="w-4 h-4 mr-1" />
+                              Match: {app.match_score}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <StatusBadge status={app.status} />
+                      </div>
+                    </div>
+
+                    {app.cover_letter && (
+                      <p className="text-gray-700 mb-4 line-clamp-2">
+                        {app.cover_letter}
+                      </p>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                      <div className="flex items-center space-x-4 text-sm text-gray-600">
+                        <span>
+                          Job Category: {app.job_id?.category || "N/A"}
+                        </span>
+                      </div>
+
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() =>
+                            setShowConfirmModal({
+                              type: "resolve-dispute-reinstate",
+                              title: "Reinstate Application",
+                              message: `Reinstate application from ${app.applicant_id?.firstName}?`,
+                              action: () =>
+                                handleResolveDispute(
+                                  app._id,
+                                  "reinstate",
+                                  "Admin reinstated application"
+                                ),
+                            })
+                          }
+                          className="flex items-center space-x-2 bg-green-600 text-white px-3 py-2 rounded-md hover:bg-green-700 text-sm font-medium"
+                          disabled={loading}
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          <span>Reinstate</span>
+                        </button>
+                        <button
+                          onClick={() =>
+                            setShowConfirmModal({
+                              type: "resolve-dispute-close",
+                              title: "Close Application",
+                              message: `Close application from ${app.applicant_id?.firstName}?`,
+                              action: () =>
+                                handleResolveDispute(
+                                  app._id,
+                                  "close",
+                                  "Admin closed application"
+                                ),
+                            })
+                          }
+                          className="flex items-center space-x-2 bg-red-600 text-white px-3 py-2 rounded-md hover:bg-red-700 text-sm font-medium"
+                          disabled={loading}
+                        >
+                          <XCircle className="w-4 h-4" />
+                          <span>Close</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Pagination */}
+            {applicationsPagination.pages > 1 && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  Showing{" "}
+                  {(applicationsPagination.page - 1) * filters.limit + 1} to{" "}
+                  {Math.min(
+                    applicationsPagination.page * filters.limit,
+                    applicationsPagination.total
+                  )}{" "}
+                  of {applicationsPagination.total} applications
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() =>
+                      setFilters((prev) => ({ ...prev, page: prev.page - 1 }))
+                    }
+                    disabled={applicationsPagination.page === 1}
+                    className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <span className="px-4 py-2 text-gray-700">
+                    Page {applicationsPagination.page} of{" "}
+                    {applicationsPagination.pages}
+                  </span>
+                  <button
+                    onClick={() =>
+                      setFilters((prev) => ({ ...prev, page: prev.page + 1 }))
+                    }
+                    disabled={
+                      applicationsPagination.page ===
+                      applicationsPagination.pages
+                    }
+                    className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-16 text-center">
+            <FileText className="w-20 h-20 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-2xl font-bold text-gray-900 mb-2">
+              No applications found
+            </h3>
+            <p className="text-gray-600">Try adjusting your filters</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   const TabNavigation = () => {
     const tabs = [
       { id: "overview", label: "Overview", icon: BarChart3, count: null },
@@ -1358,6 +2158,13 @@ const AdminDashboard = () => {
         count: dashboardData?.metrics?.verification?.pending || 0,
       },
       { id: "stats", label: "Analytics", icon: TrendingUp, count: null },
+      { id: "jobs", label: "Job Management", icon: Briefcase, count: null },
+      {
+        id: "applications",
+        label: "Applications",
+        icon: FileText,
+        count: null,
+      },
     ];
 
     return (
@@ -1475,6 +2282,8 @@ const AdminDashboard = () => {
         {activeTab === "overview" && <OverviewTab />}
         {activeTab === "pending" && <PendingVerificationsTab />}
         {activeTab === "stats" && <StatsTab />}
+        {activeTab === "jobs" && <JobManagementTab />}
+        {activeTab === "applications" && <ApplicationManagementTab />}
       </div>
 
       {/* Footer Info */}

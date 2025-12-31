@@ -36,15 +36,18 @@ const {
   checkJobPostingLimit,
   requirePremiumAccess,
   validateJobStatusTransition,
+  validateApplicationOwnership,
 } = require("../middleware/jobAuth");
+
+const { requireFeature } = require("../middleware/subscription");
 
 const {
   validateJobCreation,
   validateJobUpdate,
   validateJobSearch,
   validateJobId,
+  validateBulkJobIds,
   validateStatsQuery,
-  validateJobOwnership,
 } = require("../middleware/jobValidation");
 
 const router = express.Router();
@@ -193,7 +196,7 @@ router.post(
   "/:id/feature",
   protect,
   requireActive,
-  requirePremiumAccess,
+  requireFeature("featuredJobPostings"),
   validateJobId,
   canManageJob,
   async (req, res) => {
@@ -249,7 +252,7 @@ router.post(
   protect,
   requireActive,
   canPostJobs,
-  canPerformBulkOperations,
+  requireFeature("bulkOperations"),
   async (req, res) => {
     try {
       const { jobIds, status } = req.body;
