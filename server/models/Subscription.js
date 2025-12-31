@@ -323,13 +323,15 @@ const SubscriptionSchema = new mongoose.Schema(
   }
 );
 
-// Indexes
-SubscriptionSchema.index({ userId: 1, status: 1 });
-SubscriptionSchema.index({ stripeCustomerId: 1 });
-SubscriptionSchema.index({ stripeSubscriptionId: 1 });
+// Indexes (removed duplicates - unique/index:true fields auto-index)
+// SubscriptionSchema.index({ userId: 1 }); // Already has index: true
+// SubscriptionSchema.index({ stripeCustomerId: 1 }); // Already has index: true
+// SubscriptionSchema.index({ stripeSubscriptionId: 1 }); // Already has unique: true + index: true
+// SubscriptionSchema.index({ status: 1 }); // Already has index: true
+SubscriptionSchema.index({ userId: 1, status: 1 }); // Compound index - keep
 SubscriptionSchema.index({ currentPeriodEnd: 1 });
 SubscriptionSchema.index({ createdAt: -1 });
-SubscriptionSchema.index({ status: 1, currentPeriodEnd: 1 });
+SubscriptionSchema.index({ status: 1, currentPeriodEnd: 1 }); // Compound index - keep
 
 // Virtuals
 SubscriptionSchema.virtual("isActive").get(function () {

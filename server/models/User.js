@@ -718,10 +718,10 @@ const UserSchema = new mongoose.Schema(
   }
 );
 
-// Indexes for performance
-UserSchema.index({ email: 1 });
-UserSchema.index({ medicalLicenseNumber: 1 });
-UserSchema.index({ slug: 1 });
+// Indexes for performance (removed duplicates - unique fields auto-index)
+// UserSchema.index({ email: 1 }); // Already indexed by unique: true
+// UserSchema.index({ medicalLicenseNumber: 1 }); // Already indexed by unique: true
+// UserSchema.index({ slug: 1 }); // Already indexed by unique: true
 UserSchema.index({ "rating.average": -1 });
 UserSchema.index({ "verificationStatus.overall": 1 });
 UserSchema.index({ accountStatus: 1 });

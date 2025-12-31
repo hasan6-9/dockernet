@@ -10,6 +10,12 @@ require("dotenv").config();
 
 const app = express();
 
+// Trust proxy - CRITICAL for Railway/Heroku/Render deployments
+// This allows express-rate-limit to correctly identify users behind proxies
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1); // Trust first proxy
+}
+
 // SOCKET.IO INITIALIZATION
 // ============================================================================
 
@@ -203,8 +209,6 @@ app.use(express.urlencoded({ extended: true }));
 // MongoDB connection with enhanced options
 mongoose
   .connect(process.env.MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
     maxPoolSize: 10, // Maintain up to 10 socket connections
     serverSelectionTimeoutMS: 5000, // Keep trying to send operations for 5 seconds
     socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity

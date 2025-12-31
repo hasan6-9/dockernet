@@ -62,9 +62,9 @@ Click "Variables" tab, add these (copy from below):
 ```env
 NODE_ENV=production
 PORT=5000
-MONGODB_URI=mongodb+srv://hassanmubarak007:tT2Efr4JwrcgcAIE@cluster0.q0pb12f.mongodb.net/dockernet?retryWrites=true&w=majority&appName=Cluster0
-JWT_SECRET=gPG3/3aefMyS3TEpG+VE0ioQdxmXtlRRU+j2c/cyb5s=
-CLIENT_URL=https://yourdomain.com
+MONGODB_URI=mongodb+srv://hassanmubarak007:tT2Efr4JwrcgcAIE@cluster0.q0pb12f.mongodb.net/doconnect?retryWrites=true&w=majority&appName=Cluster0
+JWT_SECRET=fZG8Z6Qxh658kDt0llMNmxzn0x3uNajcePte4bnsqxLwSJi2TO1nA2v+/fkfALZKa9CKggKuFRO29zpkynCatg==
+CLIENT_URL=https://doconnect.life
 CLOUDINARY_CLOUD_NAME=dge6itdcy
 CLOUDINARY_API_KEY=411594876244892
 CLOUDINARY_API_SECRET=FR7tWMUxHNuiLjYbkaIJurQbStM
