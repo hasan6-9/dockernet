@@ -1,7 +1,7 @@
 {
-  "name": "dockernet",
+  "name": "doconnect",
   "version": "1.0.0",
-  "description": "DocConnect - Medical Professional Marketplace",
+  "description": "Doconnect - Medical Professional Marketplace",
   "main": "index.js",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
@@ -32,6 +32,8 @@
     "npm": ">=8.0.0"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7"
   }
 }

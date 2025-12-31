@@ -309,7 +309,7 @@ if (process.env.STRIPE_SECRET_KEY) {
 // Health check routes
 app.get("/api/health", (req, res) => {
   res.json({
-    message: "Dockernet API is running!",
+    message: "Doconnect API is running!",
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
     version: "1.0.0",
@@ -360,7 +360,7 @@ app.get("/api/status", async (req, res) => {
     res.json({
       success: true,
       platform: {
-        name: "Dockernet",
+        name: "Doconnect",
         version: "1.0.0",
         environment: process.env.NODE_ENV,
       },
@@ -412,7 +412,6 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/jobs", jobRoutes);
 app.use("/api/applications", applicationRoutes);
-app.use("/api/subscriptions", subscriptionRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/notifications", notificationRoutes);
 
@@ -582,7 +581,7 @@ const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, () => {
   console.log("=================================");
-  console.log(`🏥 Dockernet API Server Started`);
+  console.log(`Doconnect API Server Started`);
   console.log(`📡 Port: ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`);
   console.log(`🗄️  Database: ${mongoose.connection.name}`);

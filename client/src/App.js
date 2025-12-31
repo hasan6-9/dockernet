@@ -37,7 +37,6 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
-import Profile from "./pages/Profile";
 import EnhancedProfile from "./pages/EnhancedProfile";
 import DoctorSearch from "./pages/DoctorSearch";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -734,16 +733,6 @@ const AppContent = () => {
           element={
             <ProtectedRoute requireActive={true}>
               <EnhancedProfile />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Legacy Profile */}
-        <Route
-          path="/profile/legacy"
-          element={
-            <ProtectedRoute>
-              <Profile />
             </ProtectedRoute>
           }
         />

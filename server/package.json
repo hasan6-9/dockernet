@@ -1,7 +1,7 @@
 {
-  "name": "dockernet-server",
+  "name": "doconnect-server",
   "version": "1.0.0",
-  "description": "DocConnect Backend Server",
+  "description": "Doconnect Backend Server",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -27,7 +27,8 @@
     "mongoose": "^8.0.3",
     "multer": "^1.4.5-lts.1",
     "socket.io": "^4.6.0",
-    "stripe": "^14.10.0"
+    "stripe": "^14.10.0",
+    "winston": "^3.19.0"
   },
   "devDependencies": {
     "jest": "^29.7.0",

@@ -317,7 +317,7 @@ exports.uploadProfilePhoto = async (req, res) => {
         // Upload new photo
         const file = req.files.profilePhoto[0];
         const result = await uploadToCloudinary(file.buffer, {
-          folder: "dockernet/profile-photos",
+          folder: "doconnect/profile-photos",
           public_id: `profile_${user._id}`,
           transformation: [
             { width: 400, height: 400, crop: "fill", quality: "auto" },
@@ -401,7 +401,7 @@ exports.uploadDocuments = async (req, res) => {
             : documentTypes;
 
           const result = await uploadToCloudinary(file.buffer, {
-            folder: `dockernet/documents/${user._id}`,
+            folder: `doconnect/documents/${user._id}`,
             public_id: `${documentType}_${Date.now()}`,
             resource_type: "auto",
           });
